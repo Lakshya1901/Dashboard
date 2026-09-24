@@ -1,4 +1,4 @@
-// Stats: habit completion percentage per day and streaks, plus a small SVG bar chart renderer.
+// Stats: daily progress (habits + tasks) and habit streaks, plus a small SVG bar chart renderer.
 
 function fmtDate(d) {
   const y = d.getFullYear();
@@ -7,41 +7,53 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
-export function habitsByDay(data, today, days = 30) {
+// Daily progress as one pooled checklist: (habits done + tasks finished) / (all habits + tasks counted that day).
+// Each task counts once: on the day it was finished if that was by its deadline, otherwise on its deadline day
+// as missed. Unfinished tasks count once their deadline day arrives (so a task due today counts today).
+// Tasks finished before finish dates were recorded (no doneDate) don't count.
+// Days run from the first recorded activity; pct is null on a day with nothing to count.
+export function progressByDay(data, today, days = 30) {
   const habits = data.habits || [];
-  if (habits.length === 0) return [];
-
   const log = data.log || [];
+  const tasks = data.tasks || [];
+
   let earliest = null;
-  for (const entry of log) {
-    if (earliest === null || entry.date < earliest) earliest = entry.date;
+  for (const date of [...log.map((e) => e.date), ...tasks.map((t) => t.doneDate).filter(Boolean)]) {
+    if (earliest === null || date < earliest) earliest = date;
   }
-  if (earliest === null) return [];
+  if (earliest === null || (habits.length === 0 && tasks.length === 0)) return [];
 
+  // Map date -> set of distinct habit ids checked off (ended entry) that date.
   const habitIds = new Set(habits.map((r) => r.id));
-
-  // Map date -> set of distinct habit ids checked off (ended session) that date.
-  const doneByDate = new Map();
+  const habitsDone = new Map();
   for (const entry of log) {
-    if (!entry.end) continue;
-    if (!habitIds.has(entry.itemId)) continue;
-    let set = doneByDate.get(entry.date);
-    if (!set) {
-      set = new Set();
-      doneByDate.set(entry.date, set);
-    }
-    set.add(entry.itemId);
+    if (!entry.end || !habitIds.has(entry.itemId)) continue;
+    if (!habitsDone.has(entry.date)) habitsDone.set(entry.date, new Set());
+    habitsDone.get(entry.date).add(entry.itemId);
+  }
+
+  // Map date -> { done, total } for tasks.
+  const taskCount = new Map();
+  for (const t of tasks) {
+    if (t.done && !t.doneDate) continue;
+    const onTime = t.done && t.doneDate <= t.deadline;
+    const day = onTime ? t.doneDate : t.deadline;
+    const c = taskCount.get(day) || { done: 0, total: 0 };
+    c.total++;
+    if (onTime) c.done++;
+    taskCount.set(day, c);
   }
 
   const series = [];
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1));
   for (let i = 0; i < days; i++) {
     const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-    const dateStr = fmtDate(d);
-    if (dateStr < earliest) continue;
-    const doneSet = doneByDate.get(dateStr);
-    const pct = Math.round(100 * (doneSet ? doneSet.size : 0) / habits.length);
-    series.push({ date: dateStr, pct });
+    const date = fmtDate(d);
+    if (date < earliest) continue;
+    const t = taskCount.get(date) || { done: 0, total: 0 };
+    const done = (habitsDone.get(date)?.size || 0) + t.done;
+    const total = habits.length + t.total;
+    series.push({ date, pct: total ? Math.round((100 * done) / total) : null, done, total });
   }
   return series;
 }
@@ -56,7 +68,9 @@ export function habitStreak(data, id, today) {
   return n;
 }
 
+// Average of the non-null values, or null if there are none
 function average(values) {
+  values = values.filter((v) => v !== null);
   if (values.length === 0) return null;
   return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }
@@ -115,7 +129,7 @@ function shortLabel(dateStr) {
 
 export function renderStats(el, data, now) {
   const width = el.clientWidth || 700; // measured before clearing; the chart is sized from it
-  const series = habitsByDay(data, now, 30);
+  const series = progressByDay(data, now, 30);
   el.innerHTML = "";
 
   const card = document.createElement("div");
@@ -123,7 +137,7 @@ export function renderStats(el, data, now) {
 
   const head = document.createElement("div");
   head.className = "row";
-  head.innerHTML = `<p class="title">Habits</p>
+  head.innerHTML = `<p class="title">Progress</p>
     <div class="seg-ctl" role="group" aria-label="Chart range">${Object.keys(RANGES).map((r) =>
       `<button type="button" data-range="${r}" aria-pressed="${r === range}">${r}</button>`).join("")}</div>`;
   head.addEventListener("click", (e) => {
@@ -139,13 +153,14 @@ export function renderStats(el, data, now) {
   if (series.length === 0) {
     const empty = document.createElement("p");
     empty.className = "small";
-    empty.textContent = "No habit data yet";
+    empty.textContent = "No progress yet: tick off a habit or finish a task";
     card.appendChild(empty);
     el.appendChild(card);
     return;
   }
 
   const today = series[series.length - 1].pct;
+  const pctText = (p) => (p === null ? "–" : p + "%");
   const last7 = average(series.slice(-7).map((s) => s.pct));
   const last30 = average(series.slice(-30).map((s) => s.pct));
 
@@ -154,25 +169,25 @@ export function renderStats(el, data, now) {
   summary.innerHTML = `
     <div class="stats-summary-item">
       <p class="small">Today</p>
-      <p class="stats-num">${today}%</p>
+      <p class="stats-num">${pctText(today)}</p>
     </div>
     <div class="stats-summary-item">
       <p class="small">7-day avg</p>
-      <p class="stats-num">${last7 === null ? "–" : last7 + "%"}</p>
+      <p class="stats-num">${pctText(last7)}</p>
     </div>
     <div class="stats-summary-item">
       <p class="small">30-day avg</p>
-      <p class="stats-num">${last30 === null ? "–" : last30 + "%"}</p>
+      <p class="stats-num">${pctText(last30)}</p>
     </div>
   `;
   card.appendChild(summary);
 
   const R = RANGES[range];
-  const buckets = bucketSeries(habitsByDay(data, now, R.days), R.unit);
+  const buckets = bucketSeries(progressByDay(data, now, R.days), R.unit);
   // Month labels carry a short year on the first bar and on January, e.g. "Sep '25"
   const label = (date, i) => R.unit !== "month" ? shortLabel(date)
     : monthLabel(date) + (i === 0 || date.slice(5, 7) === "01" ? ` '${date.slice(2, 4)}` : "");
-  const tip = (b) => R.unit === "day" ? `${dayLabel(b.date)} · ${b.pct}%`
+  const tip = (b) => R.unit === "day" ? `${dayLabel(b.date)} · ${b.pct}% (${b.done} of ${b.total} done)`
     : R.unit === "week" ? `Week of ${shortLabel(b.date)} · ${b.pct}% avg` : `${monthLabel(b.date, true)} · ${b.pct}% avg`;
 
   // Layout in viewBox units. Green graph paper: 6-unit minor squares, a major line every 4 squares (every 25%).
@@ -203,12 +218,13 @@ export function renderStats(el, data, now) {
   for (let i = 0; i < n; i++) {
     const item = buckets[i];
     const x = padLeft + i * slot + barGap / 2;
-    const y = yFor(item.pct);
-    points.push([x + barW / 2, y]);
-    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${(plotBottom - y).toFixed(1)}" rx="1.5" fill="var(--habit)" fill-opacity="${barOpacity(item.pct).toFixed(2)}"><title>${tip(item)}</title></rect>`;
     if ((n - 1 - i) % labelEvery === 0) {
       labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${plotBottom + 10}" font-size="7" fill="var(--text-2)" text-anchor="middle">${label(item.date, i)}</text>`;
     }
+    if (item.pct === null) continue; // nothing to count that day: no bar
+    const y = yFor(item.pct);
+    points.push([x + barW / 2, y]);
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${(plotBottom - y).toFixed(1)}" rx="1.5" fill="var(--habit)" fill-opacity="${barOpacity(item.pct).toFixed(2)}"><title>${tip(item)}</title></rect>`;
   }
   let yLabels = "";
   for (const pct of [0, 25, 50, 75, 100]) {
@@ -219,7 +235,7 @@ export function renderStats(el, data, now) {
   const paperTop = plotTop - cell;
 
   const svg = `
-    <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="${chartH}" role="img" aria-label="Habit completion by day">
+    <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="${chartH}" role="img" aria-label="Habits and tasks done by day">
       <defs>
         <pattern id="paper-minor" width="${cell}" height="${cell}" x="${padLeft}" y="${plotTop}" patternUnits="userSpaceOnUse">
           <path d="M ${cell} 0 L 0 0 0 ${cell}" fill="none" stroke="var(--paper-minor)" stroke-width="0.5" />
@@ -238,7 +254,7 @@ export function renderStats(el, data, now) {
       <line x1="${padLeft}" y1="${plotBottom}" x2="${padLeft + plotW}" y2="${plotBottom}" stroke="var(--text-2)" stroke-width="0.8" />
       ${yLabels}
       ${labels}
-      <text x="8" y="${plotTop + plotH / 2}" font-size="7" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 8 ${plotTop + plotH / 2})">Habits done</text>
+      <text x="8" y="${plotTop + plotH / 2}" font-size="7" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 8 ${plotTop + plotH / 2})">Done</text>
       <text x="${padLeft + plotW / 2}" y="${chartH - 3}" font-size="7" fill="var(--muted)" text-anchor="middle">${R.axis}</text>
     </svg>
   `;

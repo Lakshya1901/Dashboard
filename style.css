@@ -44,11 +44,6 @@ body { margin: 0; background: var(--page); color: var(--text);
 .title { font-size: 1.125rem; font-weight: 500; margin: 0 0 6px; }
 .bar { height: 0.4rem; background: var(--track); border-radius: 3px; overflow: hidden; }
 .bar > div { width: 0; height: 100%; background: var(--pc, var(--accent)); }
-.strip { display: flex; gap: 4px; height: 1.2rem; margin-bottom: 10px; }
-.strip div { border-radius: 3px; min-width: 2px; }
-.cur { background: var(--pc, var(--accent)); }
-.later { background: color-mix(in srgb, var(--pc, var(--accent)) 30%, var(--card)); }
-.free { background: var(--track); border: 0.5px solid var(--border); }
 .next { border-top: 0.5px solid var(--border); padding-top: 8px; font-size: 0.8125rem; }
 .t2 { color: var(--text-2); }
 .muted { color: var(--muted); }
@@ -92,22 +87,25 @@ a { color: var(--accent); }
 .icon-btn svg { width: 1.25rem; height: 1.25rem; }
 #act-for:empty { display: none; }
 
-/* Cards */
-.cards { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 12px; }
-@media (min-width: 640px) {
-  .cards.two { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+/* Dashboard: one grid, cards in a row stretch to the same height so edges line up at every size.
+   Phones stack; mid-width puts Habits and Progress side by side under Tasks; wide screens put them
+   in a column beside Tasks, with Progress filling the rest of the height. */
+.dash { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "tasks" "habits" "stats"; }
+.dash > .widget, .dash .stats-card { margin: 0; }
+#tasks-card { grid-area: tasks; }
+#habit-card { grid-area: habits; }
+#stats { grid-area: stats; display: flex; }
+#stats > .widget { flex: 1; }
+@media (min-width: 700px) {
+  .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "tasks tasks" "habits stats"; }
 }
-/* Dashboard: phones stack everything; wide screens put stats beside the Now card */
-.dash { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 12px;
-  grid-template-areas: "now" "gantt" "risk" "stats"; }
-.dash > .cards { grid-area: now; }
-#gantt-card { grid-area: gantt; }
-#risk-card { grid-area: risk; }
-#stats { grid-area: stats; }
 @media (min-width: 1100px) {
-  .dash { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start;
-    grid-template-areas: "now stats" "gantt gantt" "risk risk"; }
+  .dash { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); grid-template-rows: auto 1fr;
+    grid-template-areas: "tasks habits" "tasks stats"; }
 }
+/* Sections inside the Tasks card */
+.sub { border-top: 0.5px solid var(--border); margin-top: 14px; padding-top: 12px; }
 .checklist, .risk { list-style: none; margin: 0; padding: 0; }
 .risk li { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8125rem; padding: 4px 0; }
 .risk li + li { border-top: 0.5px solid var(--border); }

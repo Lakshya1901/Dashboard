@@ -30,8 +30,8 @@
       </div>
 
       <div id="today-body" class="dash" hidden>
-        <div class="cards" id="cards">
-          <article class="widget" id="now-card" aria-label="Now">
+        <article class="widget" id="tasks-card" aria-label="Tasks">
+          <div id="now-card">
             <div class="row" style="margin-bottom:10px;">
               <span class="tag" id="mode-tag"></span>
               <span class="small" id="clock"></span>
@@ -40,7 +40,6 @@
             <p class="title" id="now-title"></p>
             <div class="bar" id="now-bar-wrap"><div id="now-bar"></div></div>
             <div class="row small" id="now-meta" style="margin:4px 0 12px;"><span id="now-slot"></span><span id="now-left"></span></div>
-            <div class="strip" id="strip" aria-hidden="true"></div>
             <div class="next" id="next"></div>
             <p class="small" id="act-for"></p>
             <div class="actions">
@@ -48,29 +47,29 @@
               <button type="button" class="btn" id="btn-pause">Pause</button>
               <button type="button" class="btn" id="btn-done">Done</button>
             </div>
-          </article>
-
-          <article class="widget" id="habit-card" aria-label="Habits" hidden>
-            <p class="small" id="habit-count" style="margin-bottom:6px;"></p>
-            <ul class="checklist" id="habit-list"></ul>
-          </article>
-        </div>
-
-        <article class="widget" id="gantt-card" aria-label="Schedule">
-          <div class="row">
-            <p class="label">Schedule</p>
-            <p class="label legend"><span class="p-max">max</span><span class="p-med">med</span><span class="p-low">low</span></p>
           </div>
-          <div class="gantt" id="gantt"></div>
-          <p class="small" id="gantt-info" aria-live="polite"></p>
+
+          <div class="sub" id="gantt-card" aria-label="Schedule">
+            <div class="row">
+              <p class="label">Schedule</p>
+              <p class="label legend"><span class="p-max">max</span><span class="p-med">med</span><span class="p-low">low</span></p>
+            </div>
+            <div class="gantt" id="gantt"></div>
+            <p class="small" id="gantt-info" aria-live="polite"></p>
+          </div>
+
+          <div class="sub" id="risk-card" aria-label="At risk" hidden>
+            <p class="label">At risk</p>
+            <ul class="risk" id="risk"></ul>
+          </div>
         </article>
 
-        <article class="widget" id="risk-card" aria-label="At risk" hidden>
-          <p class="label">At risk</p>
-          <ul class="risk" id="risk"></ul>
+        <article class="widget" id="habit-card" aria-label="Habits" hidden>
+          <p class="small" id="habit-count" style="margin-bottom:6px;"></p>
+          <ul class="checklist" id="habit-list"></ul>
         </article>
 
-        <section id="stats" aria-label="Routine stats"></section>
+        <section id="stats" aria-label="Progress"></section>
       </div>
     </section>
   </main>

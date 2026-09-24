@@ -97,7 +97,7 @@ function act(kind) {
     const mine = run && run.itemId === t.id ? run : null;
     if (mine) mine.end = time;
     else if (kind === 'done') d.log.push({ date, itemId: t.id, start: time, end: time });
-    if (kind === 'done' && t.kind === 'task') { const task = d.tasks.find((x) => x.id === t.id); if (task) task.done = true; }
+    if (kind === 'done' && t.kind === 'task') { const task = d.tasks.find((x) => x.id === t.id); if (task) { task.done = true; task.doneDate = date; } }
   });
 }
 
@@ -157,25 +157,12 @@ function renderNow(d, plan, nn, n) {
   $('#now-label').textContent = cur ? (isRun ? 'Now running' : 'Now') : 'Now';
   $('#now-title').textContent = cur ? cur.name : TAGS[nn.mode];
   $('#now-bar-wrap').hidden = $('#now-meta').hidden = !cur;
-  $('#now-card').className = `widget${cur ? ` p-${cur.priority}` : ''}`;
+  $('#now-card').className = cur ? `p-${cur.priority}` : '';
   if (cur) {
     $('#now-bar').style.width = `${Math.round((nn.progress || 0) * 100)}%`;
     $('#now-slot').textContent = `${hm(cur.start)} – ${hm(cur.end, true)}`;
     $('#now-left').textContent = `${nn.minutesLeft} min left`;
   }
-  // Mini strip: today's remaining items, with gaps shown as free time
-  const dayEnd = toMin(new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1));
-  const segs = [];
-  let c = nowMin;
-  for (const it of plan.items) {
-    if (it.end <= nowMin || it.start >= dayEnd) continue;
-    const s = Math.max(it.start, nowMin), e = Math.min(it.end, dayEnd);
-    if (s > c) segs.push(['free', s - c, 'Free']);
-    segs.push([`${sameItem(it, cur) ? 'cur' : 'later'} p-${it.priority}`, e - s, it.name]);
-    c = e;
-  }
-  $('#strip').hidden = !segs.length;
-  $('#strip').innerHTML = segs.map(([k, w, t]) => `<div class="${k}" style="flex:${w}" title="${esc(t)}"></div>`).join('');
   const nx = nn.next;
   $('#next').innerHTML = nx
     ? `<span class="t2">Next</span> · ${esc(nx.name)} <span class="muted">${ymd(fromMin(nx.start)) === today ? '' : DAYS[fromMin(nx.start).getDay()] + ' '}${hm(nx.start)}</span>`
@@ -195,7 +182,6 @@ function renderNow(d, plan, nn, n) {
 function renderHabits(d, n) {
   const today = ymd(n), show = d.habits.length > 0;
   $('#habit-card').hidden = !show;
-  $('#cards').classList.toggle('two', show);
   if (!show) return;
   const week = [...Array(7)].map((_, k) => ymd(new Date(n.getFullYear(), n.getMonth(), n.getDate() - 6 + k)));
   const w = canWrite();
@@ -318,7 +304,7 @@ function onEditorClick(e) {
   } else if (act === 'add-habit') { focus = ['habits', draft.habits.length]; draft.habits.push({ id: id(), name: '' }); }
   else if (act === 'up' || act === 'down') { const j = act === 'up' ? i - 1 : i + 1; [list[i], list[j]] = [list[j], list[i]]; }
   else if (act === 'del') list.splice(i, 1);
-  else if (act === 'undo') { const open = draft.tasks.filter((t) => !t.done).length; const [t] = list.splice(i, 1); t.done = false; list.splice(open, 0, t); }
+  else if (act === 'undo') { const open = draft.tasks.filter((t) => !t.done).length; const [t] = list.splice(i, 1); t.done = false; delete t.doneDate; list.splice(open, 0, t); }
   drawEditor();
   if (focus) $(`.ed-row[data-list="${focus[0]}"][data-i="${focus[1]}"] .ed-name`).focus();
 }

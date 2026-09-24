@@ -1,7 +1,7 @@
 # Dashboard
 
 A priority-and-deadline task scheduler with a daily habit tracker, a Now/Next
-card, a multi-day Gantt chart, and habit-completion stats. It plans your day around a
+card, a multi-day Gantt chart, and daily progress stats. It plans your day around a
 work window you set and tells you what to do right now and what's next. Data is
 synced across your devices through a secret GitHub Gist, so there's no account
 or server to run. It's plain HTML, CSS, and JavaScript with no build step and
@@ -99,14 +99,18 @@ don't support Gists):
 
 ## Using it
 
-- **One page:** the Now/Next card, habits, habit stats, Gantt chart, and
-  at-risk list. Tasks are coloured by priority (red max, amber med, green low)
-  on a black-and-white page.
-- **Habit chart:** the share of habits done, on green graph paper. Pick
-  **1M** (daily bars), **3M** or **6M** (weekly averages), or **1Y** (monthly
-  averages); the choice is remembered on that device. Fuller bars are more
-  solid. The layout and text scale with the window; on wide screens
-  the stats sit beside the Now card, on phones everything stacks.
+- **One page, three cards:** **Tasks** (Now/Next, the schedule's Gantt chart,
+  and the at-risk list), **Habits**, and **Progress**. Wide screens put Habits
+  and Progress in a column beside Tasks; mid-size screens put them side by side
+  under Tasks; phones stack everything. Cards in a row share the same height.
+  Tasks are coloured by priority (red max, amber med, green low) on a
+  black-and-white page.
+- **Progress chart:** each day is one checklist of your habits plus the tasks
+  that count that day: a task counts on the day you finished it if that was by
+  its deadline, otherwise as missed on its deadline day (a task due today counts
+  today). The day's % is done ÷ total. Pick **1M** (daily bars), **3M** or **6M**
+  (weekly averages), or **1Y** (monthly averages); the choice is remembered on
+  that device. Fuller bars are more solid.
 - **Settings (gear icon):** add, edit, delete, and reorder (with the up/down buttons)
   tasks and habits, set your work hours, and change your Gist ID and token, all from one
   dialog with an explicit **Save** button. Clicking outside the dialog closes it without saving.
@@ -151,6 +155,7 @@ don't support Gists):
 | `estimateMin` | tasks | Estimated total time to complete, in minutes |
 | `deadline` | tasks | Required, `YYYY-MM-DD`; the task is due by the end of that day |
 | `done` | tasks | Whether the task is finished |
+| `doneDate` | tasks | `YYYY-MM-DD` the task was marked done; set by **Done**, used by the Progress chart |
 | `date` | log | The local date, `YYYY-MM-DD`, the session happened on |
 | `itemId` | log | The task or habit's `id` |
 | `start` | log | Session start time, `HH:MM`, local |
@@ -175,11 +180,11 @@ their history, and the next save writes them as `habits`.
 
 ## Files
 
-- `index.html` - page structure: Now/Next card, habit tracker, Gantt chart, at-risk list, stats section, and the settings dialog.
+- `index.html` - page structure: Tasks card (Now/Next, Gantt chart, at-risk list), habit tracker, Progress section, and the settings dialog.
 - `app.js` - app logic: state, rendering, the Start/Pause/Done actions, the editor, and wiring for sync.
 - `scheduler.js` - the pure scheduling algorithm: builds the plan and picks the current/next item.
 - `sync.js` - reads and writes `schedule.json` via the GitHub Gist API, with a localStorage cache and offline fallback.
-- `stats.js` - computes daily habit-completion percentages and streaks, and draws the stats chart.
+- `stats.js` - computes daily progress (habits + tasks) and habit streaks, and draws the Progress chart.
 - `sw.js` - service worker that caches the app's files for offline use.
 - `style.css` - main styling and theme tokens (light/dark).
 - `stats.css` - styling for the Stats view.
