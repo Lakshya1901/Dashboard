@@ -4,14 +4,24 @@
   --accent: #1a1a1a; --success: #3b6d11; --danger: #b0524a;
   /* Colour lives in the accents only: task priorities and habits */
   --p-max: #e5484d; --p-med: #f5a524; --p-low: #22a06b; --habit: #8b5cf6;
+  color-scheme: light;
 }
+/* Dark follows the system unless the theme button picked one (data-theme on <html>) */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --page: #1a1a19; --card: #262624; --track: #333331;
     --border: rgba(255,255,255,0.14); --text: #f1efe8; --text-2: #b4b2a9; --muted: #888780;
     --accent: #f1efe8; --success: #97c459; --danger: #d98a80;
     --p-max: #ff6b6b; --p-med: #fbbf24; --p-low: #34d399; --habit: #a78bfa;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --page: #1a1a19; --card: #262624; --track: #333331;
+  --border: rgba(255,255,255,0.14); --text: #f1efe8; --text-2: #b4b2a9; --muted: #888780;
+  --accent: #f1efe8; --success: #97c459; --danger: #d98a80;
+  --p-max: #ff6b6b; --p-med: #fbbf24; --p-low: #34d399; --habit: #a78bfa;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 /* Everything is sized in rem, so the UI grows with the window: 15px on phones up to 20px on large screens */
@@ -77,6 +87,7 @@ a { color: var(--accent); }
 #now-title { font-size: 1.6rem; line-height: 1.2; margin: 2px 0 10px; }
 .icon-btn { display: grid; place-items: center; padding: 6px; border-radius: 50%; }
 .icon-btn svg { width: 1.25rem; height: 1.25rem; }
+.top-btns { display: flex; gap: 8px; }
 #act-for:empty { display: none; }
 
 /* Cards */

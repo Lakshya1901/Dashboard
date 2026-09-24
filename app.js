@@ -346,6 +346,26 @@ async function saveEditor(e) {
   if (gistChanged || token !== s.token) refresh(); else render();
 }
 
+// ---------- Theme ----------
+// Follows the system until the button picks light or dark; the choice is remembered on this device
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => (document.documentElement.dataset.theme || (systemDark.matches ? 'dark' : 'light')) === 'dark';
+function syncThemeBtn() {
+  const dark = isDark(), label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+  $('#theme-btn').setAttribute('aria-label', label);
+  $('#theme-btn').title = label;
+  $('#theme-btn .i-sun').style.display = dark ? '' : 'none';
+  $('#theme-btn .i-moon').style.display = dark ? 'none' : '';
+}
+$('#theme-btn').onclick = () => {
+  const t = isDark() ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('theme', t); } catch { /* not remembered */ }
+  syncThemeBtn();
+};
+systemDark.addEventListener('change', syncThemeBtn);
+syncThemeBtn();
+
 // ---------- Wiring ----------
 $('#edit-btn').onclick = $('#setup-edit').onclick = openEditor;
 $('#btn-start').onclick = () => act('start');
