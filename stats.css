@@ -25,3 +25,24 @@
   width: 100%;
   height: auto;
 }
+
+.stats-legend {
+  align-items: center;
+  gap: 3px;
+  margin: 6px 0 0;
+}
+
+.stats-legend i {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 2px;
+  background: var(--habit);
+}
+
+.stats-legend i:first-of-type {
+  margin-left: 3px;
+}
+
+.stats-legend i:last-of-type {
+  margin-right: 3px;
+}

@@ -101,11 +101,17 @@ don't support Gists):
 
 - **One page:** the Now/Next card, habits, habit stats, Gantt chart, and
   at-risk list. Tasks are coloured by priority (red max, amber med, green low)
-  on a black-and-white page. The layout and text scale with the window; on wide screens
+  on a black-and-white page.
+- **Habit chart:** the share of habits done, on green graph paper. Pick
+  **1M** (daily bars), **3M** or **6M** (weekly averages), or **1Y** (monthly
+  averages); the choice is remembered on that device. Fuller bars are more
+  solid. The layout and text scale with the window; on wide screens
   the stats sit beside the Now card, on phones everything stacks.
 - **Settings (gear icon):** add, edit, delete, and reorder (with the up/down buttons)
   tasks and habits, set your work hours, and change your Gist ID and token, all from one
   dialog with an explicit **Save** button. Clicking outside the dialog closes it without saving.
+  **Appearance** (System, Light, or Dark) applies right away and is remembered
+  on that device only.
 - **Start / Pause / Done:** act on whichever item is current, or the next
   task if nothing is running yet.
 - **Offline:** the status line reads "Offline · last synced HH:MM", and the

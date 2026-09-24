@@ -1,7 +1,7 @@
 // Tests for stats.js habitsByDay, written blind from PLAN.md section 5.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { habitsByDay, habitStreak } from '../stats.js';
+import { habitsByDay, habitStreak, bucketSeries } from '../stats.js';
 
 // ---------- helpers ----------
 const today = new Date(2026, 8, 24, 15, 0); // Thu 2026-09-24, local
@@ -96,4 +96,24 @@ test('habitStreak keeps yesterday\'s streak alive until today is checked off', (
   const d = data(habits('a'), [done('2026-09-22', 'a'), done('2026-09-23', 'a')]);
   assert.equal(habitStreak(d, 'a', today), 2);
   assert.equal(habitStreak(data(habits('a'), [done('2026-09-22', 'a')]), 'a', today), 0);
+});
+
+test('bucketSeries averages weeks starting Monday, dated by their first day in the series', () => {
+  const s = [
+    { date: '2026-09-19', pct: 100 }, // Sat
+    { date: '2026-09-20', pct: 50 }, // Sun
+    { date: '2026-09-21', pct: 0 }, // Mon: new week
+    { date: '2026-09-22', pct: 100 },
+    { date: '2026-09-23', pct: 25 },
+  ];
+  assert.deepEqual(bucketSeries(s, 'week'), [
+    { date: '2026-09-19', pct: 75 },
+    { date: '2026-09-21', pct: 42 },
+  ]);
+});
+
+test('bucketSeries groups by month; day returns the series unchanged', () => {
+  const s = [{ date: '2026-08-31', pct: 40 }, { date: '2026-09-01', pct: 60 }, { date: '2026-09-02', pct: 80 }];
+  assert.deepEqual(bucketSeries(s, 'month'), [{ date: '2026-08-31', pct: 40 }, { date: '2026-09-01', pct: 70 }]);
+  assert.equal(bucketSeries(s, 'day'), s);
 });

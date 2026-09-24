@@ -1,6 +1,6 @@
 import { buildPlan, nowAndNext, hoursOf, checkHours, DEFAULT_HOURS } from './scheduler.js';
 import { getSettings, setSettings, loadData, saveData } from './sync.js';
-import { habitsByDay, habitStreak, renderStats } from './stats.js';
+import { habitStreak, renderStats } from './stats.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -138,7 +138,7 @@ function render() {
     renderGantt(d, plan, nn, n, h);
     $('#risk-card').hidden = !plan.atRisk.length;
     $('#risk').innerHTML = plan.atRisk.map((r) => `<li><span>${esc(r.name)}</span><span class="muted">due ${esc(fmtDate(r.deadline))}</span></li>`).join('');
-    renderStats($('#stats'), habitsByDay(d, n));
+    renderStats($('#stats'), d, n);
   } catch (e) {
     console.error(e);
     $('#status').textContent = `Could not build the plan: ${errMsg(e)}`;
@@ -270,6 +270,7 @@ function openEditor() {
   $('#ed-data').disabled = $('#ed-data-hb').disabled = $('#ed-data-h').disabled = !w;
   $('#ed-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : !s.gistId ? 'Add a Gist below to edit tasks' : 'Offline: tasks are read-only';
   $('#ed-err').textContent = '';
+  $(`#ed-theme input[value="${document.documentElement.dataset.theme || 'system'}"]`).checked = true;
   drawEditor();
   $('#editor').showModal();
 }
@@ -347,24 +348,13 @@ async function saveEditor(e) {
 }
 
 // ---------- Theme ----------
-// Follows the system until the button picks light or dark; the choice is remembered on this device
-const systemDark = matchMedia('(prefers-color-scheme: dark)');
-const isDark = () => (document.documentElement.dataset.theme || (systemDark.matches ? 'dark' : 'light')) === 'dark';
-function syncThemeBtn() {
-  const dark = isDark(), label = dark ? 'Switch to light mode' : 'Switch to dark mode';
-  $('#theme-btn').setAttribute('aria-label', label);
-  $('#theme-btn').title = label;
-  $('#theme-btn .i-sun').style.display = dark ? '' : 'none';
-  $('#theme-btn .i-moon').style.display = dark ? 'none' : '';
+// System follows the device; Light or Dark is remembered on this device (applied early by index.html)
+function setTheme(t) {
+  if (t === 'system') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  try { if (t === 'system') localStorage.removeItem('theme'); else localStorage.setItem('theme', t); } catch { /* not remembered */ }
 }
-$('#theme-btn').onclick = () => {
-  const t = isDark() ? 'light' : 'dark';
-  document.documentElement.dataset.theme = t;
-  try { localStorage.setItem('theme', t); } catch { /* not remembered */ }
-  syncThemeBtn();
-};
-systemDark.addEventListener('change', syncThemeBtn);
-syncThemeBtn();
+$('#ed-theme').addEventListener('change', (e) => setTheme(e.target.value));
 
 // ---------- Wiring ----------
 $('#edit-btn').onclick = $('#setup-edit').onclick = openEditor;

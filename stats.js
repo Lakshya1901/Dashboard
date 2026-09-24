@@ -61,6 +61,43 @@ function average(values) {
   return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
 }
 
+// Groups a daily series into weeks (starting Monday) or months, averaging each group's percentages.
+// Each group is dated by its first day in the series.
+export function bucketSeries(series, unit) {
+  if (unit === "day") return series;
+  const groups = new Map();
+  for (const s of series) {
+    let key = s.date.slice(0, 7);
+    if (unit === "week") {
+      const [y, m, d] = s.date.split("-").map(Number);
+      const monday = new Date(y, m - 1, d);
+      monday.setDate(d - ((monday.getDay() + 6) % 7));
+      key = fmtDate(monday);
+    }
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  }
+  return [...groups.values()].map((g) => ({ date: g[0].date, pct: average(g.map((s) => s.pct)) }));
+}
+
+// Chart ranges: longer ranges show weekly or monthly averages so bars stay readable
+const RANGES = {
+  "1M": { days: 30, unit: "day", axis: "Date" },
+  "3M": { days: 91, unit: "week", axis: "Week" },
+  "6M": { days: 182, unit: "week", axis: "Week" },
+  "1Y": { days: 365, unit: "month", axis: "Month" },
+};
+let range = "1M";
+try { if (RANGES[localStorage.getItem("statsRange")]) range = localStorage.getItem("statsRange"); } catch { /* default */ }
+
+// One tonal colour: bars get more solid the more habits got done (Material-style)
+const barOpacity = (pct) => 0.25 + 0.75 * (pct / 100);
+
+function monthLabel(dateStr, long) {
+  const [y, m] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, long ? { month: "long", year: "numeric" } : { month: "short" });
+}
+
 function dayLabel(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -76,16 +113,28 @@ function shortLabel(dateStr) {
   return `${month} ${d}`;
 }
 
-export function renderStats(el, series) {
+export function renderStats(el, data, now) {
+  const width = el.clientWidth || 700; // measured before clearing; the chart is sized from it
+  const series = habitsByDay(data, now, 30);
   el.innerHTML = "";
 
   const card = document.createElement("div");
   card.className = "widget stats-card";
 
-  const title = document.createElement("p");
-  title.className = "title";
-  title.textContent = "Habits";
-  card.appendChild(title);
+  const head = document.createElement("div");
+  head.className = "row";
+  head.innerHTML = `<p class="title">Habits</p>
+    <div class="seg-ctl" role="group" aria-label="Chart range">${Object.keys(RANGES).map((r) =>
+      `<button type="button" data-range="${r}" aria-pressed="${r === range}">${r}</button>`).join("")}</div>`;
+  head.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-range]");
+    if (!b) return;
+    range = b.dataset.range;
+    try { localStorage.setItem("statsRange", range); } catch { /* not remembered */ }
+    renderStats(el, data, now);
+    el.querySelector(`button[data-range="${range}"]`).focus();
+  });
+  card.appendChild(head);
 
   if (series.length === 0) {
     const empty = document.createElement("p");
@@ -118,60 +167,79 @@ export function renderStats(el, series) {
   `;
   card.appendChild(summary);
 
-  const n = series.length;
-  const chartW = 360; // small viewBox so labels stay readable when the SVG scales to the card width
-  const chartH = 120;
-  const padTop = 8;
-  const padBottom = 16;
-  const padSide = 4;
-  const plotH = chartH - padTop - padBottom;
+  const R = RANGES[range];
+  const buckets = bucketSeries(habitsByDay(data, now, R.days), R.unit);
+  // Month labels carry a short year on the first bar and on January, e.g. "Sep '25"
+  const label = (date, i) => R.unit !== "month" ? shortLabel(date)
+    : monthLabel(date) + (i === 0 || date.slice(5, 7) === "01" ? ` '${date.slice(2, 4)}` : "");
+  const tip = (b) => R.unit === "day" ? `${dayLabel(b.date)} · ${b.pct}%`
+    : R.unit === "week" ? `Week of ${shortLabel(b.date)} · ${b.pct}% avg` : `${monthLabel(b.date, true)} · ${b.pct}% avg`;
+
+  // Layout in viewBox units. Green graph paper: 6-unit minor squares, a major line every 4 squares (every 25%).
+  // The paper runs one square above 100% so full-day dots stay inside it.
+  const n = buckets.length;
+  const cell = 6;
+  const major = cell * 4;
+  const padLeft = 32; // y-axis labels and title
+  // Aim for ~1.6px per unit so labels stay readable on phones: narrow screens get fewer squares, not smaller text
+  const plotW = cell * Math.min(54, Math.max(24, Math.floor((width / 1.6 - padLeft - 12) / cell)));
+  const chartW = padLeft + plotW + 12; // right margin keeps the last date label inside
+  const plotTop = 10 + cell; // the 100% line
+  const plotH = major * 4; // 0% to 100%
+  const plotBottom = plotTop + plotH;
+  const chartH = plotBottom + 30; // x-axis labels and title
   // Bars take 60% of their slot so the graph paper shows between them
-  const slot = (chartW - padSide * 2) / n;
+  const slot = plotW / n;
   const barW = Math.max(1, slot * 0.6);
   const barGap = slot - barW;
 
-  const yFor = (pct) => padTop + plotH * (1 - pct / 100);
+  const yFor = (pct) => plotTop + plotH * (1 - pct / 100);
 
   let bars = "";
   let labels = "";
   const points = [];
-  const labelEvery = 7;
+  // As many labels as fit, counted back from today so the latest bar is always labelled
+  const labelEvery = Math.ceil(n / Math.max(2, Math.floor(plotW / (R.unit === "month" ? 18 : 30))));
   for (let i = 0; i < n; i++) {
-    const item = series[i];
-    const x = padSide + i * slot + barGap / 2;
+    const item = buckets[i];
+    const x = padLeft + i * slot + barGap / 2;
     const y = yFor(item.pct);
-    const h = padTop + plotH - y;
-    const fill = item.pct >= 100 ? "var(--habit)" : "var(--habit-bg)";
-    points.push(`${(x + barW / 2).toFixed(1)},${y.toFixed(1)}`);
-    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="1.5" fill="${fill}"><title>${dayLabel(item.date)} · ${item.pct}%</title></rect>`;
-    if (i % labelEvery === 0 || i === n - 1) {
-      const lx = x + barW / 2;
-      labels += `<text x="${lx.toFixed(1)}" y="${chartH - 4}" font-size="9" fill="var(--muted)" text-anchor="middle">${shortLabel(item.date)}</text>`;
+    points.push([x + barW / 2, y]);
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${(plotBottom - y).toFixed(1)}" rx="1.5" fill="var(--habit)" fill-opacity="${barOpacity(item.pct).toFixed(2)}"><title>${tip(item)}</title></rect>`;
+    if ((n - 1 - i) % labelEvery === 0) {
+      labels += `<text x="${(x + barW / 2).toFixed(1)}" y="${plotBottom + 10}" font-size="7" fill="var(--text-2)" text-anchor="middle">${label(item.date, i)}</text>`;
     }
   }
-
-  // Graph paper: a minor grid of 6-unit squares with a major line every 4 squares (every 25%), aligned to the plot
-  const cell = 6;
-  const major = cell * 4;
-  const plotW = chartW - padSide * 2;
-  const dots = points.map((p) => { const [cx, cy] = p.split(","); return `<circle cx="${cx}" cy="${cy}" r="1.8" fill="var(--card)" stroke="var(--text)" stroke-width="1" />`; }).join("");
+  let yLabels = "";
+  for (const pct of [0, 25, 50, 75, 100]) {
+    yLabels += `<text x="${padLeft - 3}" y="${(yFor(pct) + 2.5).toFixed(1)}" font-size="7" fill="var(--text-2)" text-anchor="end">${pct}%</text>`;
+  }
+  const line = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const dots = points.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.8" fill="var(--card)" stroke="var(--text)" stroke-width="1" />`).join("");
+  const paperTop = plotTop - cell;
 
   const svg = `
     <svg viewBox="0 0 ${chartW} ${chartH}" width="100%" height="${chartH}" role="img" aria-label="Habit completion by day">
       <defs>
-        <pattern id="paper-minor" width="${cell}" height="${cell}" x="${padSide}" y="${padTop}" patternUnits="userSpaceOnUse">
-          <path d="M ${cell} 0 L 0 0 0 ${cell}" fill="none" stroke="var(--text)" stroke-opacity="0.09" stroke-width="0.5" />
+        <pattern id="paper-minor" width="${cell}" height="${cell}" x="${padLeft}" y="${plotTop}" patternUnits="userSpaceOnUse">
+          <path d="M ${cell} 0 L 0 0 0 ${cell}" fill="none" stroke="var(--paper-minor)" stroke-width="0.5" />
         </pattern>
-        <pattern id="paper-major" width="${major}" height="${major}" x="${padSide}" y="${padTop}" patternUnits="userSpaceOnUse">
+        <pattern id="paper-major" width="${major}" height="${major}" x="${padLeft}" y="${plotTop}" patternUnits="userSpaceOnUse">
           <rect width="${major}" height="${major}" fill="url(#paper-minor)" />
-          <path d="M ${major} 0 L 0 0 0 ${major}" fill="none" stroke="var(--text)" stroke-opacity="0.2" stroke-width="0.7" />
+          <path d="M ${major} 0 L 0 0 0 ${major}" fill="none" stroke="var(--paper-major)" stroke-width="0.8" />
         </pattern>
       </defs>
-      <rect x="${padSide}" y="${padTop}" width="${plotW}" height="${plotH}" fill="url(#paper-major)" stroke="var(--text)" stroke-opacity="0.2" stroke-width="0.7" />
+      <rect x="${padLeft}" y="${paperTop}" width="${plotW}" height="${plotBottom - paperTop}" fill="var(--paper)" />
+      <rect x="${padLeft}" y="${paperTop}" width="${plotW}" height="${plotBottom - paperTop}" fill="url(#paper-major)" stroke="var(--paper-major)" stroke-width="0.8" />
       ${bars}
-      <polyline points="${points.join(" ")}" fill="none" stroke="var(--text)" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" />
+      <polyline points="${line}" fill="none" stroke="var(--text)" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" />
       ${dots}
+      <line x1="${padLeft}" y1="${paperTop}" x2="${padLeft}" y2="${plotBottom}" stroke="var(--text-2)" stroke-width="0.8" />
+      <line x1="${padLeft}" y1="${plotBottom}" x2="${padLeft + plotW}" y2="${plotBottom}" stroke="var(--text-2)" stroke-width="0.8" />
+      ${yLabels}
       ${labels}
+      <text x="8" y="${plotTop + plotH / 2}" font-size="7" fill="var(--muted)" text-anchor="middle" transform="rotate(-90 8 ${plotTop + plotH / 2})">Habits done</text>
+      <text x="${padLeft + plotW / 2}" y="${chartH - 3}" font-size="7" fill="var(--muted)" text-anchor="middle">${R.axis}</text>
     </svg>
   `;
 
@@ -179,6 +247,11 @@ export function renderStats(el, series) {
   chartWrap.className = "stats-chart";
   chartWrap.innerHTML = svg;
   card.appendChild(chartWrap);
+
+  const legend = document.createElement("p");
+  legend.className = "label legend stats-legend";
+  legend.innerHTML = `0%${[0, 33, 67, 100].map((p) => `<i style="opacity: ${barOpacity(p)}"></i>`).join("")}100%`;
+  card.appendChild(legend);
 
   el.appendChild(card);
 }
