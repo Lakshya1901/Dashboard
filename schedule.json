@@ -1,0 +1,424 @@
+{
+  "habits": [
+    {
+      "id": "r1",
+      "name": "Workout"
+    },
+    {
+      "id": "r2",
+      "name": "Shower"
+    },
+    {
+      "id": "r3",
+      "name": "Breakfast"
+    },
+    {
+      "id": "r4",
+      "name": "Journal"
+    },
+    {
+      "id": "r5",
+      "name": "Reading"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "name": "Write project report",
+      "priority": "max",
+      "estimateMin": 360,
+      "deadline": "2026-09-30",
+      "done": false
+    },
+    {
+      "id": "t2",
+      "name": "Prepare client slides",
+      "priority": "med",
+      "estimateMin": 240,
+      "deadline": "2026-09-25",
+      "done": false
+    },
+    {
+      "id": "t3",
+      "name": "Pay electricity bill",
+      "priority": "low",
+      "estimateMin": 15,
+      "deadline": "2026-09-24",
+      "done": false
+    },
+    {
+      "id": "t4",
+      "name": "Review pull requests",
+      "priority": "med",
+      "estimateMin": 90,
+      "deadline": "2026-09-28",
+      "done": false
+    },
+    {
+      "id": "t5",
+      "name": "Plan next sprint",
+      "priority": "low",
+      "estimateMin": 120,
+      "deadline": "2026-10-02",
+      "done": false
+    },
+    {
+      "id": "t6",
+      "name": "Fix login bug",
+      "priority": "max",
+      "estimateMin": 180,
+      "deadline": "2026-09-26",
+      "done": false
+    }
+  ],
+  "log": [
+    {
+      "date": "2026-09-10",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-10",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-10",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-10",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-10",
+      "itemId": "r5",
+      "start": "07:35",
+      "end": "08:05"
+    },
+    {
+      "date": "2026-09-11",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-11",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-11",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-11",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-12",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-12",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-12",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-12",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-12",
+      "itemId": "r5",
+      "start": "07:35",
+      "end": "08:05"
+    },
+    {
+      "date": "2026-09-13",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-13",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-13",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-14",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-14",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-15",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-15",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-15",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-15",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-15",
+      "itemId": "r5",
+      "start": "07:35",
+      "end": "08:05"
+    },
+    {
+      "date": "2026-09-16",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-16",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-16",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-16",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-17",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-17",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-17",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-17",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-17",
+      "itemId": "r5",
+      "start": "07:35",
+      "end": "08:05"
+    },
+    {
+      "date": "2026-09-18",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-18",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-18",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-18",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-18",
+      "itemId": "r5",
+      "start": "07:35",
+      "end": "08:05"
+    },
+    {
+      "date": "2026-09-19",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-20",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-20",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-20",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-21",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-21",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-21",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-21",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-22",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-22",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-22",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-22",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-22",
+      "itemId": "r5",
+      "start": "07:35",
+      "end": "08:05"
+    },
+    {
+      "date": "2026-09-23",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-23",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    },
+    {
+      "date": "2026-09-23",
+      "itemId": "r3",
+      "start": "07:00",
+      "end": "07:20"
+    },
+    {
+      "date": "2026-09-23",
+      "itemId": "r4",
+      "start": "07:20",
+      "end": "07:35"
+    },
+    {
+      "date": "2026-09-23",
+      "itemId": "t1",
+      "start": "14:00",
+      "end": "16:00"
+    },
+    {
+      "date": "2026-09-24",
+      "itemId": "r1",
+      "start": "06:00",
+      "end": "06:45"
+    },
+    {
+      "date": "2026-09-24",
+      "itemId": "r2",
+      "start": "06:45",
+      "end": "07:00"
+    }
+  ]
+}

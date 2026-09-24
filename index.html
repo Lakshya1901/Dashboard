@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="stats.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="row">
+      <h1>Dashboard</h1>
+      <button type="button" class="btn icon-btn" id="edit-btn" aria-label="Settings: edit tasks, habits, hours and sync" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+    <p class="small status" id="status" role="status" aria-live="polite"></p>
+  </header>
+
+  <main>
+    <section id="today">
+      <div class="widget setup" id="setup" hidden>
+        <p class="title">Connect your schedule</p>
+        <p class="small">Your tasks live in a secret GitHub Gist. Open <button type="button" class="link" id="setup-edit">Settings</button> and add the Gist ID and a token with only the gist scope. Or <a href="?sample">try the sample data</a>.</p>
+      </div>
+
+      <div id="today-body" class="dash" hidden>
+        <div class="cards" id="cards">
+          <article class="widget" id="now-card" aria-label="Now">
+            <div class="row" style="margin-bottom:10px;">
+              <span class="tag" id="mode-tag"></span>
+              <span class="small" id="clock"></span>
+            </div>
+            <p class="small" id="now-label"></p>
+            <p class="title" id="now-title"></p>
+            <div class="bar" id="now-bar-wrap"><div id="now-bar"></div></div>
+            <div class="row small" id="now-meta" style="margin:4px 0 12px;"><span id="now-slot"></span><span id="now-left"></span></div>
+            <div class="strip" id="strip" aria-hidden="true"></div>
+            <div class="next" id="next"></div>
+            <p class="small" id="act-for"></p>
+            <div class="actions">
+              <button type="button" class="btn primary" id="btn-start">Start</button>
+              <button type="button" class="btn" id="btn-pause">Pause</button>
+              <button type="button" class="btn" id="btn-done">Done</button>
+            </div>
+          </article>
+
+          <article class="widget" id="habit-card" aria-label="Habits" hidden>
+            <p class="small" id="habit-count" style="margin-bottom:6px;"></p>
+            <ul class="checklist" id="habit-list"></ul>
+          </article>
+        </div>
+
+        <article class="widget" id="gantt-card" aria-label="Schedule">
+          <div class="row">
+            <p class="label">Schedule</p>
+            <p class="label legend"><span class="p-max">max</span><span class="p-med">med</span><span class="p-low">low</span></p>
+          </div>
+          <div class="gantt" id="gantt"></div>
+          <p class="small" id="gantt-info" aria-live="polite"></p>
+        </article>
+
+        <article class="widget" id="risk-card" aria-label="At risk" hidden>
+          <p class="label">At risk</p>
+          <ul class="risk" id="risk"></ul>
+        </article>
+
+        <section id="stats" aria-label="Routine stats"></section>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="editor" aria-labelledby="ed-title">
+  <form id="ed-form" novalidate>
+    <div class="row">
+      <h2 id="ed-title">Settings</h2>
+      <p class="small" id="ed-note"></p>
+    </div>
+    <fieldset id="ed-data">
+      <legend>Tasks</legend>
+      <ul class="ed-list" id="ed-tasks"></ul>
+      <button type="button" class="btn" data-act="add-task">Add task</button>
+    </fieldset>
+    <fieldset id="ed-data-hb">
+      <legend>Habits</legend>
+      <ul class="ed-list" id="ed-habits"></ul>
+      <button type="button" class="btn" data-act="add-habit">Add habit</button>
+    </fieldset>
+    <fieldset id="ed-data-h">
+      <legend>Hours</legend>
+      <div class="ed-hours" id="ed-hours">
+        <label class="field">Work starts <input type="time" data-h="workStart" required></label>
+        <label class="field">Work ends <input type="time" data-h="workEnd" required></label>
+      </div>
+      <p class="small">Tasks are scheduled inside work hours (weekends only when needed).</p>
+    </fieldset>
+    <fieldset>
+      <legend>Settings</legend>
+      <label class="field">Gist ID <input id="set-gist" autocomplete="off" spellcheck="false"></label>
+      <label class="field">Token (gist scope only) <input id="set-token" type="password" autocomplete="off" spellcheck="false"></label>
+      <p class="small">Stored on this device only. Leave the token blank to keep the saved one.</p>
+    </fieldset>
+    <p class="small err" id="ed-err" role="alert"></p>
+    <div class="actions end">
+      <button type="button" class="btn" id="ed-cancel">Cancel</button>
+      <button type="submit" class="btn primary" id="ed-save">Save</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

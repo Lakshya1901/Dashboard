@@ -1,0 +1,27 @@
+
+.stats-summary {
+  display: flex;
+  gap: 24px;
+  margin: 4px 0 16px;
+}
+
+.stats-summary-item .small {
+  margin: 0 0 2px;
+}
+
+.stats-num {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin: 0;
+  color: var(--text);
+}
+
+.stats-chart {
+  width: 100%;
+}
+
+.stats-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
