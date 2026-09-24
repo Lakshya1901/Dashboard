@@ -7,6 +7,12 @@ function fmtDate(d) {
   return `${y}-${m}-${day}`;
 }
 
+// Returns check(habit, date) -> whether the habit counts as done that day: it has an ended log entry then.
+export function habitChecker(data) {
+  const logged = new Set((data.log || []).filter((e) => e.end).map((e) => `${e.date}|${e.itemId}`));
+  return (habit, date) => logged.has(`${date}|${habit.id}`);
+}
+
 // Daily progress as one pooled checklist: (habits done + tasks finished) / (all habits + tasks counted that day).
 // Each task counts once: on the day it was finished if that was by its deadline, otherwise on its deadline day
 // as missed. Unfinished tasks count once their deadline day arrives (so a task due today counts today).
@@ -23,14 +29,7 @@ export function progressByDay(data, today, days = 30) {
   }
   if (earliest === null || (habits.length === 0 && tasks.length === 0)) return [];
 
-  // Map date -> set of distinct habit ids checked off (ended entry) that date.
-  const habitIds = new Set(habits.map((r) => r.id));
-  const habitsDone = new Map();
-  for (const entry of log) {
-    if (!entry.end || !habitIds.has(entry.itemId)) continue;
-    if (!habitsDone.has(entry.date)) habitsDone.set(entry.date, new Set());
-    habitsDone.get(entry.date).add(entry.itemId);
-  }
+  const check = habitChecker(data);
 
   // Map date -> { done, total } for tasks.
   const taskCount = new Map();
@@ -51,7 +50,7 @@ export function progressByDay(data, today, days = 30) {
     const date = fmtDate(d);
     if (date < earliest) continue;
     const t = taskCount.get(date) || { done: 0, total: 0 };
-    const done = (habitsDone.get(date)?.size || 0) + t.done;
+    const done = habits.filter((h) => check(h, date)).length + t.done;
     const total = habits.length + t.total;
     series.push({ date, pct: total ? Math.round((100 * done) / total) : null, done, total });
   }
@@ -59,12 +58,11 @@ export function progressByDay(data, today, days = 30) {
 }
 
 // Consecutive days the habit was checked off, ending today (or yesterday while today is still open).
-export function habitStreak(data, id, today) {
-  const done = new Set((data.log || []).filter((e) => e.itemId === id && e.end).map((e) => e.date));
+export function habitStreak(data, habit, today, check = habitChecker(data)) {
   const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  if (!done.has(fmtDate(d))) d.setDate(d.getDate() - 1);
+  if (!check(habit, fmtDate(d))) d.setDate(d.getDate() - 1);
   let n = 0;
-  for (; done.has(fmtDate(d)); d.setDate(d.getDate() - 1)) n++;
+  for (; check(habit, fmtDate(d)); d.setDate(d.getDate() - 1)) n++;
   return n;
 }
 

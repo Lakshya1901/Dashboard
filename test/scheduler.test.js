@@ -10,7 +10,10 @@ const m = (day, hh, mm = 0) => Math.floor(at(day, hh, mm).getTime() / 60000);
 
 const task = (id, priority, estimateMin, deadline, extra = {}) =>
   ({ id, name: extra.name ?? id.toUpperCase(), priority, estimateMin, deadline, done: false, ...extra });
-const data = ({ tasks = [], log = [] } = {}) => ({ tasks, log });
+// Most tests use the original 12:00-24:00 weekday window with weekends only when needed
+const OLD_HOURS = { workStart: '12:00', workEnd: '24:00', weekends: 'needed' };
+const data = ({ tasks = [], log = [], hours = OLD_HOURS } = {}) => ({ tasks, log, hours });
+const H12 = hoursOf(data());
 
 const taskItems = (plan) => plan.items.filter((i) => i.kind === 'task');
 const spans = (plan, id) => taskItems(plan).filter((i) => i.id === id).map((i) => [i.start, i.end]);
@@ -450,12 +453,12 @@ test('nowAndNext at an item end: now is the next item (end is exclusive)', () =>
 });
 
 test('nowAndNext before work starts is off with next = first task', () => {
-  const r = nowAndNext(handPlan, at(21, 11, 59));
+  const r = nowAndNext(handPlan, at(21, 11, 59), H12);
   assert.deepEqual(r, { now: null, next: T1, mode: 'off', minutesLeft: null, progress: null });
 });
 
 test('nowAndNext at midnight (24:00) is off', () => {
-  const r = nowAndNext(handPlan, at(22, 0));
+  const r = nowAndNext(handPlan, at(22, 0), H12);
   assert.deepEqual(r, { now: null, next: T3, mode: 'off', minutesLeft: null, progress: null });
 });
 
@@ -475,7 +478,8 @@ test('nowAndNext with an empty plan', () => {
   assert.deepEqual(nowAndNext({ items: [], atRisk: [] }, at(21, 15)), {
     now: null, next: null, mode: 'free', minutesLeft: null, progress: null,
   });
-  assert.equal(nowAndNext({ items: [], atRisk: [] }, at(21, 3)).mode, 'off');
+  assert.equal(nowAndNext({ items: [], atRisk: [] }, at(21, 3), H12).mode, 'off');
+  assert.equal(nowAndNext({ items: [], atRisk: [] }, at(21, 3)).mode, 'free'); // default hours are 24/7
 });
 
 // ---------- buildPlan + nowAndNext together ----------
@@ -529,9 +533,20 @@ test('custom work hours: tasks only run inside the 09:00-17:00 window', () => {
   assert.deepEqual(spans(plan, 'a'), [[m(21, 9), m(21, 17)], [m(22, 9), m(22, 11)]]);
 });
 
-test('invalid hours fall back to the defaults', () => {
-  const d = { ...data({ tasks: [task('a', 'max', 60, '2026-09-30')] }), hours: { workStart: '18:00', workEnd: '09:00' } };
-  assert.deepEqual(spans(buildPlan(d, at(21, 8)), 'a'), [[m(21, 12), m(21, 13)]]);
+test('invalid hours fall back to the 24/7 defaults', () => {
+  const d = data({ tasks: [task('a', 'max', 60, '2026-09-30')], hours: { workStart: '18:00', workEnd: '09:00' } });
+  assert.deepEqual(spans(buildPlan(d, at(21, 8)), 'a'), [[m(21, 8), m(21, 9)]]);
+});
+
+test('default hours are 24/7: work runs through the night and the weekend', () => {
+  const d = data({ tasks: [task('a', 'low', 2 * 1440, '2026-10-30')], hours: {} });
+  const plan = buildPlan(d, at(25, 22)); // Friday 22:00
+  assert.deepEqual(spans(plan, 'a'), [[m(25, 22), m(26, 0)], [m(26, 0), m(27, 0)], [m(27, 0), m(27, 22)]]);
+});
+
+test('weekends "always" uses Saturday for any task', () => {
+  const d = data({ tasks: [task('a', 'low', 60, '2026-10-30')], hours: { ...OLD_HOURS, weekends: 'always' } });
+  assert.deepEqual(spans(buildPlan(d, at(26, 13)), 'a'), [[m(26, 13), m(26, 14)]]);
 });
 
 test('checkHours rejects bad formats and reversed windows', () => {
@@ -539,6 +554,7 @@ test('checkHours rejects bad formats and reversed windows', () => {
   assert.match(checkHours({ workStart: '9:00', workEnd: '17:00' }), /HH:MM/);
   assert.match(checkHours({ workStart: '12:00', workEnd: '24:01' }), /HH:MM/);
   assert.match(checkHours({ workStart: '17:00', workEnd: '09:00' }), /end after/);
+  assert.match(checkHours({ workStart: '09:00', workEnd: '17:00', weekends: 'sometimes' }), /Weekends/);
 });
 
 test('nowAndNext with custom hours is off before work starts', () => {

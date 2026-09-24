@@ -125,13 +125,13 @@ test('an unfinished task due today counts today; future and undated-done tasks d
 
 test('habitStreak counts consecutive checked-off days ending today', () => {
   const d = data(habits('a'), [done('2026-09-22', 'a'), done('2026-09-23', 'a'), done('2026-09-24', 'a'), done('2026-09-20', 'a')]);
-  assert.equal(habitStreak(d, 'a', today), 3);
+  assert.equal(habitStreak(d, { id: 'a' }, today), 3);
 });
 
 test('habitStreak keeps yesterday\'s streak alive until today is checked off', () => {
   const d = data(habits('a'), [done('2026-09-22', 'a'), done('2026-09-23', 'a')]);
-  assert.equal(habitStreak(d, 'a', today), 2);
-  assert.equal(habitStreak(data(habits('a'), [done('2026-09-22', 'a')]), 'a', today), 0);
+  assert.equal(habitStreak(d, { id: 'a' }, today), 2);
+  assert.equal(habitStreak(data(habits('a'), [done('2026-09-22', 'a')]), { id: 'a' }, today), 0);
 });
 
 test('bucketSeries averages weeks starting Monday, dated by their first day in the series', () => {

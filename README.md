@@ -1,4 +1,4 @@
-# Dashboard
+# Spezzatura
 
 A priority-and-deadline task scheduler with a daily habit tracker, a Now/Next
 card, a multi-day Gantt chart, and daily progress stats. It plans your day around a
@@ -9,10 +9,13 @@ no dependencies — open `index.html` (or a hosted copy of it) and it works.
 
 ## How scheduling works
 
-- **Work hours:** weekdays 12:00-24:00 by default; change them under
-  **Hours** in settings. Weekend hours (the same times) are only used for
-  max-priority tasks, or for other tasks that can't be finished by their
-  deadline using weekday hours alone.
+- **Work hours:** around the clock (00:00-24:00, every day) by default, so work
+  can go anywhere. Change the window under **Hours** in settings, and optionally
+  tick "Only use weekends when a deadline needs it": then weekends are only used
+  for max-priority tasks, or for tasks that can't be finished by their deadline
+  using weekdays alone.
+- **Estimates** are entered in hours, decimals allowed (e.g. 1.5 or 0.25). A
+  task longer than what's left of the day simply continues on the next days.
 - **Habits:** daily habits (workout, reading, etc.) aren't scheduled. Tick
   each one off whenever you do it that day; tick it again to undo. Each habit
   shows its last 7 days and its current streak (consecutive days done; today
@@ -99,6 +102,12 @@ don't support Gists):
 
 ## Using it
 
+- **Rewards banner:** for dopamine loading. It reads "Rewards locked" and lists
+  what's left until today's habits and every task due today (or overdue) are
+  done, then switches to "Rewards unlocked".
+- **Task box:** tap a task in the schedule to open its box: add up to 20
+  subtasks (tick them off, optional time in hours, for reference only) and short
+  notes (up to 280 characters).
 - **One page, three cards:** **Tasks** (Now/Next, the schedule's Gantt chart,
   and the at-risk list), **Habits**, and **Progress**. Wide screens put Habits
   and Progress in a column beside Tasks; mid-size screens put them side by side
@@ -152,7 +161,9 @@ don't support Gists):
 | `id` | habits, tasks | Short unique identifier |
 | `name` | habits, tasks | Display name |
 | `priority` | tasks | `max`, `med`, or `low` |
-| `estimateMin` | tasks | Estimated total time to complete, in minutes |
+| `estimateMin` | tasks | Estimated total time to complete, in minutes (entered in hours in the app) |
+| `subtasks` | tasks | Optional list of `{ "id", "name", "done", "min" }`; `min` (optional) is the subtask's time in minutes |
+| `notes` | tasks | Optional short notes, up to 280 characters |
 | `deadline` | tasks | Required, `YYYY-MM-DD`; the task is due by the end of that day |
 | `done` | tasks | Whether the task is finished |
 | `doneDate` | tasks | `YYYY-MM-DD` the task was marked done; set by **Done**, used by the Progress chart |
@@ -160,7 +171,8 @@ don't support Gists):
 | `itemId` | log | The task or habit's `id` |
 | `start` | log | Session start time, `HH:MM`, local |
 | `end` | log | Session end time, `HH:MM`; omitted while the session is still running |
-| `workStart`, `workEnd` | hours | Daily work window, `HH:MM`; `workEnd` may be `24:00`. Optional; defaults 12:00-24:00 |
+| `workStart`, `workEnd` | hours | Daily work window, `HH:MM`; `workEnd` may be `24:00`. Optional; defaults 00:00-24:00 |
+| `weekends` | hours | `always` (default) or `needed` (only when a deadline needs it) |
 
 Each `log` entry is one work session or habit check-off. A task's logged time is
 the sum of its ended sessions; a habit counts as done for a day once it has an

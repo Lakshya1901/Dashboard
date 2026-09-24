@@ -11,13 +11,15 @@ const ymd = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const isWeekend = (day) => day.getDay() === 0 || day.getDay() === 6;
 
-export const DEFAULT_HOURS = { workStart: "12:00", workEnd: "24:00" };
+// Around the clock by default; weekends "always" or only when "needed" to meet a deadline (or for max priority)
+export const DEFAULT_HOURS = { workStart: "00:00", workEnd: "24:00", weekends: "always" };
 
 // Returns an error message for invalid hours ("HH:MM" strings), or "" if they're fine.
 export function checkHours(h) {
   const ok = (s, max) => /^\d\d:\d\d$/.test(s || "") && +s.slice(3) < 60 && hhmm(s) <= max;
   if (!ok(h.workStart, 1439) || !ok(h.workEnd, 1440)) return "Times must be HH:MM.";
   if (hhmm(h.workStart) >= hhmm(h.workEnd)) return "Work hours must end after they start.";
+  if (h.weekends !== undefined && h.weekends !== "always" && h.weekends !== "needed") return "Weekends must be always or needed.";
   return "";
 }
 
@@ -25,7 +27,7 @@ export function checkHours(h) {
 export function hoursOf(data) {
   const h = { ...DEFAULT_HOURS, ...(data.hours || {}) };
   const v = checkHours(h) ? DEFAULT_HOURS : h;
-  return { workStart: hhmm(v.workStart), workEnd: hhmm(v.workEnd) };
+  return { workStart: hhmm(v.workStart), workEnd: hhmm(v.workEnd), weekends: v.weekends };
 }
 
 // First usable slot [start, end) at or after `cursor` in the daily work windows.
@@ -105,7 +107,7 @@ export function buildPlan(data, now) {
   for (const r of simulate(deadlineOrder(rest), startMin, () => false, h)) {
     if (r.late) eligible.add(r.task);
   }
-  const sim = (order) => simulate(order, startMin, (t) => eligible.has(t), h);
+  const sim = (order) => simulate(order, startMin, (t) => h.weekends === "always" || eligible.has(t), h);
 
   // Check what's achievable: drop worst tasks until the deadline order has no late task.
   let feasible = rest;

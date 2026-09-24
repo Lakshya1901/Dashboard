@@ -1,6 +1,6 @@
 import { buildPlan, nowAndNext, hoursOf, checkHours, DEFAULT_HOURS } from './scheduler.js';
 import { getSettings, setSettings, loadData, saveData } from './sync.js';
-import { habitStreak, renderStats } from './stats.js';
+import { habitStreak, habitChecker, renderStats } from './stats.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -25,8 +25,11 @@ const fromMin = (m) => new Date(m * 60000);
 const hm = (m, end) => { const s = hhmm(fromMin(m)); return end && s === '00:00' ? '24:00' : s; };
 const dayLabel = (d) => `${DAYS[d.getDay()]} ${d.getDate()}`;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const NOTE_MAX = 280, SUB_NAME_MAX = 60, SUB_LIMIT = 20;
 // Older data kept habits as a timed "routine"; carry those over as habits
 const habitsOf = (d) => d.habits || (d.routine || []).map(({ id, name }) => ({ id, name }));
+// Times are entered in hours (decimals allowed) and stored in minutes
+const toHours = (min) => (min > 0 ? String(Math.round((min / 60) * 100) / 100) : '');
 const norm = (d) => ({ tasks: [], log: [], ...d, habits: habitsOf(d) });
 const yesterday = (date) => { const d = parseLocal(date); d.setDate(d.getDate() - 1); return ymd(d); };
 // Open session from today, or from yesterday if work ran past midnight
@@ -134,7 +137,9 @@ function render() {
   try {
     const h = hoursOf(d), plan = buildPlan(d, n), nn = nowAndNext(plan, n, h);
     renderNow(d, plan, nn, n);
-    renderHabits(d, n);
+    const check = habitChecker(d);
+    renderReward(d, n, check);
+    renderHabits(d, n, check);
     renderGantt(d, plan, nn, n, h);
     $('#risk-card').hidden = !plan.atRisk.length;
     $('#risk').innerHTML = plan.atRisk.map((r) => `<li><span>${esc(r.name)}</span><span class="muted">due ${esc(fmtDate(r.deadline))}</span></li>`).join('');
@@ -179,7 +184,19 @@ function renderNow(d, plan, nn, n) {
   btn('#btn-done', false, 'Mark done:');
 }
 
-function renderHabits(d, n) {
+// Dopamine loading: rewards stay locked until today's habits and every task due today (or overdue) are done
+function renderReward(d, n, check) {
+  const today = ymd(n);
+  const left = [...d.habits.filter((h) => !check(h, today)), ...d.tasks.filter((t) => !t.done && t.deadline <= today)].map((x) => x.name);
+  $('#reward').className = `widget reward ${left.length ? 'locked' : 'open'}`;
+  $('#reward-lock').hidden = !left.length;
+  $('#reward-open').hidden = !!left.length;
+  $('#reward-text').innerHTML = left.length
+    ? `<b>Rewards locked</b> · ${left.length} left today: ${esc(left.join(', '))}`
+    : '<b>Rewards unlocked</b> · today\'s work is done';
+}
+
+function renderHabits(d, n, check) {
   const today = ymd(n), show = d.habits.length > 0;
   $('#habit-card').hidden = !show;
   if (!show) return;
@@ -187,9 +204,9 @@ function renderHabits(d, n) {
   const w = canWrite();
   let done = 0;
   $('#habit-list').innerHTML = d.habits.map((h) => {
-    const ok = doneOn(d, today, h.id), streak = habitStreak(d, h.id, n);
+    const ok = check(h, today), streak = habitStreak(d, h, n, check);
     if (ok) done++;
-    const dots = week.map((ds) => `<i class="${doneOn(d, ds, h.id) ? 'on' : ''}${ds === today ? ' today' : ''}"></i>`).join('');
+    const dots = week.map((ds) => `<i class="${check(h, ds) ? 'on' : ''}${ds === today ? ' today' : ''}"></i>`).join('');
     return `<li class="habit${ok ? ' done' : ''}">
       <button type="button" class="check" data-habit="${esc(h.id)}" aria-pressed="${ok}"${w ? '' : ' disabled'}><span class="box" aria-hidden="true">${ok ? '&#10003;' : ''}</span>${esc(h.name)}</button>
       <span class="week" title="Last 7 days" aria-hidden="true">${dots}</span>
@@ -205,10 +222,13 @@ function renderGantt(d, plan, nn, n, h) {
   const GW = (g1 - g0) * 60;
   const lastDs = plan.items.reduce((m, i) => { const s = ymd(fromMin(i.start)); return s > m ? s : m; }, today);
   const clamp = (m) => Math.min(Math.max(m, 0), GW);
-  const seg = (s0, a, b, cls, text, title) => {
+  // Task segments (with an id) are buttons that open the task box
+  const seg = (s0, a, b, cls, text, title, id) => {
     const l = clamp(a - s0), r = clamp(b - s0);
     if (r <= l) return '';
-    const attrs = title ? ` title="${esc(title)}" role="img" aria-label="${esc(title)}"` : ' aria-hidden="true"';
+    const attrs = !title ? ' aria-hidden="true"'
+      : id ? ` title="${esc(title)}" role="button" tabindex="0" data-id="${esc(id)}" aria-label="${esc(title)}: open subtasks and notes"`
+      : ` title="${esc(title)}" role="img" aria-label="${esc(title)}"`;
     return `<div class="seg ${cls}" style="left:${(l / GW) * 100}%;width:max(2px, calc(${((r - l) / GW) * 100}% - 1px))"${attrs}>${text ? `<span>${esc(text)}</span>` : ''}</div>`;
   };
   const ticks = [];
@@ -223,7 +243,7 @@ function renderGantt(d, plan, nn, n, h) {
     for (const it of plan.items) {
       if (it.start >= s0 + GW || it.end <= s0) continue;
       const cls = [it.kind, `p-${it.priority}`, sameItem(it, nn.now) ? 'cur' : '', it.late ? 'late' : ''].join(' ');
-      row += seg(s0, it.start, it.end, cls, it.name, `${it.name} ${hm(it.start)}–${hm(it.end, true)}${it.late ? ' (late)' : ''}`);
+      row += seg(s0, it.start, it.end, cls, it.name, `${it.name} ${hm(it.start)}–${hm(it.end, true)}${it.late ? ' (late)' : ''}`, it.id);
     }
     if (ds === today) {
       for (const e of d.log) {
@@ -246,8 +266,8 @@ let draft = null, draftOrig = '';
 
 function openEditor() {
   const d = state.data || { habits: [], tasks: [] };
-  const { workStart, workEnd } = { ...DEFAULT_HOURS, ...d.hours };
-  draft = structuredClone({ habits: d.habits, tasks: [...d.tasks.filter((t) => !t.done), ...d.tasks.filter((t) => t.done)], hours: { workStart, workEnd } });
+  const { workStart, workEnd, weekends } = { ...DEFAULT_HOURS, ...d.hours };
+  draft = structuredClone({ habits: d.habits, tasks: [...d.tasks.filter((t) => !t.done), ...d.tasks.filter((t) => t.done)], hours: { workStart, workEnd, weekends } });
   draftOrig = JSON.stringify(draft);
   const s = getSettings(), w = canWrite();
   $('#set-gist').value = s.gistId;
@@ -268,13 +288,14 @@ const moveBtns = (list, i, lo, hi, name) =>
 
 function drawEditor() {
   // A time input can't show 24:00, so midnight shows as 00:00
-  for (const k in draft.hours) $(`#ed-hours [data-h="${k}"]`).value = draft.hours[k] === '24:00' ? '00:00' : draft.hours[k];
+  for (const k of ['workStart', 'workEnd']) $(`#ed-hours [data-h="${k}"]`).value = draft.hours[k] === '24:00' ? '00:00' : draft.hours[k];
+  $('#ed-data-h [data-h="weekends"]').checked = draft.hours.weekends === 'needed';
   const open = draft.tasks.filter((t) => !t.done).length;
   $('#ed-tasks').innerHTML = draft.tasks.map((t, i) => t.done
     ? `<li class="ed-row gone"><s>${esc(t.name)}</s><span class="ed-btns"><button type="button" class="btn" data-act="undo" data-list="tasks" data-i="${i}" aria-label="Mark ${esc(t.name)} not done">Undo</button><button type="button" class="btn" data-act="del" data-list="tasks" data-i="${i}" aria-label="Delete ${esc(t.name)}">&#215;</button></span></li>`
     : `<li class="ed-row" data-list="tasks" data-i="${i}">
         <input class="ed-name" data-f="name" value="${esc(t.name)}" placeholder="Task name" aria-label="Task name">
-        <input type="number" min="1" step="5" data-f="estimateMin" value="${esc(t.estimateMin)}" aria-label="Estimate in minutes" title="Estimate (min)">
+        <input type="number" min="0.25" step="0.25" data-f="estimateMin" value="${toHours(t.estimateMin)}" aria-label="Estimate in hours" title="Estimate (hours; can span several days)"><span class="small">h</span>
         <select data-f="priority" aria-label="Priority">${PRI.map((p) => `<option${p === t.priority ? ' selected' : ''}>${p}</option>`).join('')}</select>
         <input type="date" data-f="deadline" value="${esc(t.deadline)}" aria-label="Deadline">
         <span class="ed-btns">${moveBtns('tasks', i, 0, open - 1, t.name || 'task')}</span></li>`).join('');
@@ -285,10 +306,12 @@ function drawEditor() {
 
 function onEditorInput(e) {
   const k = e.target.dataset.h;
+  if (k === 'weekends') { draft.hours.weekends = e.target.checked ? 'needed' : 'always'; return; }
   if (k) { draft.hours[k] = k === 'workEnd' && e.target.value === '00:00' ? '24:00' : e.target.value; return; }
   const f = e.target.dataset.f, row = e.target.closest('[data-i]');
   if (!f || !row) return;
-  const v = e.target.type === 'number' ? Number(e.target.value) : e.target.value;
+  // Estimates are typed in hours and stored in minutes
+  const v = f === 'estimateMin' ? Math.round(Number(e.target.value) * 60) : e.target.value;
   draft[row.dataset.list][+row.dataset.i][f] = v;
 }
 
@@ -317,7 +340,7 @@ async function saveEditor(e) {
   const habits = draft.habits.filter((r) => r.name.trim()).map((r) => ({ ...r, name: r.name.trim() }));
   const tasks = draft.tasks.filter((t) => String(t.name).trim()).map((t) => ({ ...t, name: t.name.trim() }));
   const bad = tasks.find((t) => !t.done && (!(t.estimateMin > 0) || !/^\d{4}-\d\d-\d\d$/.test(t.deadline || '')));
-  if (bad) { $('#ed-err').textContent = `Check "${bad.name}": it needs a positive number of minutes and a deadline.`; return; }
+  if (bad) { $('#ed-err').textContent = `Check "${bad.name}": it needs an estimate in hours (e.g. 1.5) and a deadline.`; return; }
   const hours = draft.hours, hoursErr = checkHours(hours);
   if (hoursErr) { $('#ed-err').textContent = `Check the hours: ${hoursErr}`; return; }
   const edited = JSON.stringify({ habits, tasks, hours }) !== draftOrig;
@@ -331,6 +354,88 @@ async function saveEditor(e) {
   $('#editor').close();
   if (gistChanged) { state.data = null; state.syncedAt = null; state.error = ''; }
   if (gistChanged || token !== s.token) refresh(); else render();
+}
+
+// ---------- Task box (subtasks and notes) ----------
+let tbDraft = null, tbTask = null;
+const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ''}` : `${m}m`);
+
+function openTaskBox(id) {
+  const t = state.data && state.data.tasks.find((x) => x.id === id);
+  if (!t) return;
+  tbTask = t;
+  tbDraft = structuredClone({ subtasks: t.subtasks || [], notes: t.notes || '' });
+  const w = canWrite();
+  $('#tb-title').textContent = t.name;
+  $('#tb-meta').textContent = `${t.priority} priority · due ${fmtDate(t.deadline)} · estimate ${fmtMin(t.estimateMin)}`;
+  $('#tb-data').disabled = !w;
+  $('#tb-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : 'Offline: read-only';
+  $('#tb-notes').value = tbDraft.notes;
+  $('#tb-err').textContent = '';
+  drawTaskBox();
+  $('#task-box').showModal();
+}
+
+function drawTaskBox() {
+  $('#tb-subs').innerHTML = tbDraft.subtasks.map((s, i) => `<li class="ed-row sub-row" data-i="${i}">
+      <input type="checkbox" data-s="done"${s.done ? ' checked' : ''} aria-label="Done">
+      <input class="ed-name" data-s="name" maxlength="${SUB_NAME_MAX}" value="${esc(s.name)}" placeholder="Subtask" aria-label="Subtask name">
+      <input type="number" min="0.25" step="0.25" data-s="min" value="${toHours(s.min)}" placeholder="h" aria-label="Time in hours (optional)" title="Time in hours (optional)">
+      <span class="ed-btns"><button type="button" class="btn" data-act="del-sub" data-i="${i}" aria-label="Delete ${esc(s.name || 'subtask')}">&#215;</button></span></li>`).join('');
+  $('#tb-add').disabled = tbDraft.subtasks.length >= SUB_LIMIT;
+  updateTaskBox();
+}
+
+// Counts only; the subtask times are for reference and don't change the schedule
+function updateTaskBox() {
+  const subs = tbDraft.subtasks, mins = subs.reduce((a, s) => a + (s.min > 0 ? s.min : 0), 0);
+  $('#tb-total').textContent = subs.length
+    ? `${subs.filter((s) => s.done).length} of ${subs.length} done${mins ? ` · subtasks add up to ${fmtMin(mins)} (task estimate ${fmtMin(tbTask.estimateMin)})` : ''}`
+    : 'Break the task into steps.';
+  $('#tb-count').textContent = `${$('#tb-notes').value.length}/${NOTE_MAX}`;
+}
+
+function onTaskBoxInput(e) {
+  if (e.target.id === 'tb-notes') tbDraft.notes = e.target.value;
+  const f = e.target.dataset.s, row = e.target.closest('[data-i]');
+  if (f && row) {
+    const sub = tbDraft.subtasks[+row.dataset.i];
+    if (f === 'done') sub.done = e.target.checked;
+    else if (f === 'min') sub.min = e.target.value ? Math.round(Number(e.target.value) * 60) : null;
+    else sub.name = e.target.value;
+  }
+  updateTaskBox();
+}
+
+function onTaskBoxClick(e) {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  if (b.dataset.act === 'add-sub' && tbDraft.subtasks.length < SUB_LIMIT) tbDraft.subtasks.push({ id: crypto.randomUUID().slice(0, 8), name: '', done: false });
+  else if (b.dataset.act === 'del-sub') tbDraft.subtasks.splice(+b.dataset.i, 1);
+  else return;
+  drawTaskBox();
+  if (b.dataset.act === 'add-sub') $('#tb-subs li:last-child .ed-name').focus();
+}
+
+async function saveTaskBox(e) {
+  e.preventDefault();
+  const subtasks = tbDraft.subtasks.filter((s) => s.name.trim()).map((s) => {
+    const out = { id: s.id, name: s.name.trim().slice(0, SUB_NAME_MAX), done: !!s.done };
+    if (s.min > 0) out.min = Math.round(s.min);
+    return out;
+  });
+  const notes = tbDraft.notes.trim().slice(0, NOTE_MAX);
+  if (!canWrite()) { $('#tb-err').textContent = 'Not saved: read-only right now.'; return; }
+  $('#tb-save').disabled = true;
+  const ok = await write((d) => {
+    const t = d.tasks.find((x) => x.id === tbTask.id);
+    if (!t) return;
+    if (subtasks.length) t.subtasks = subtasks; else delete t.subtasks;
+    if (notes) t.notes = notes; else delete t.notes;
+  });
+  $('#tb-save').disabled = false;
+  if (!ok) { $('#tb-err').textContent = `Not saved: ${state.error}`; return; }
+  $('#task-box').close();
 }
 
 // ---------- Theme ----------
@@ -348,16 +453,31 @@ $('#btn-start').onclick = () => act('start');
 $('#btn-pause').onclick = () => act('pause');
 $('#btn-done').onclick = () => act('done');
 $('#ed-cancel').onclick = () => $('#editor').close();
-// Clicking the backdrop closes the dialog like Cancel; a drag that starts inside (e.g. selecting text) doesn't
-const onBackdrop = (e) => { const r = $('#editor').getBoundingClientRect(); return e.target === $('#editor') && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom); };
-let downOnBackdrop = false;
-$('#editor').addEventListener('pointerdown', (e) => { downOnBackdrop = onBackdrop(e); });
-$('#editor').addEventListener('click', (e) => { if (downOnBackdrop && onBackdrop(e)) $('#editor').close(); });
-$('#habit-list').addEventListener('click', (e) => { const b = e.target.closest('button[data-habit]'); if (b) toggleHabit(b.dataset.habit); });
+// Clicking the backdrop closes a dialog like Cancel; a drag that starts inside (e.g. selecting text) doesn't
+function closeOnBackdrop(dlg) {
+  const outside = (e) => { const r = dlg.getBoundingClientRect(); return e.target === dlg && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom); };
+  let downOutside = false;
+  dlg.addEventListener('pointerdown', (e) => { downOutside = outside(e); });
+  dlg.addEventListener('click', (e) => { if (downOutside && outside(e)) dlg.close(); });
+}
+closeOnBackdrop($('#editor'));
+closeOnBackdrop($('#task-box'));
+$('#habit-list').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-habit]');
+  if (b) toggleHabit(b.dataset.habit);
+});
+$('#tb-cancel').onclick = () => $('#task-box').close();
+$('#tb-form').addEventListener('submit', saveTaskBox);
+$('#tb-form').addEventListener('input', onTaskBoxInput);
+$('#tb-form').addEventListener('click', onTaskBoxClick);
 $('#ed-form').addEventListener('submit', saveEditor);
 $('#ed-form').addEventListener('input', onEditorInput);
 $('#ed-form').addEventListener('click', onEditorClick);
-$('#gantt').addEventListener('click', (e) => { const s = e.target.closest('.seg[title]'); $('#gantt-info').textContent = s ? s.title : ''; });
+$('#gantt').addEventListener('click', (e) => { const s = e.target.closest('.seg[data-id]'); if (s) openTaskBox(s.dataset.id); });
+$('#gantt').addEventListener('keydown', (e) => {
+  const s = e.target.closest('.seg[data-id]');
+  if (s && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openTaskBox(s.dataset.id); }
+});
 
 setInterval(render, 30000);
 document.addEventListener('visibilitychange', () => {
