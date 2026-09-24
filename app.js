@@ -10,7 +10,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const PRI = ['max', 'med', 'low'];
 const TAGS = { tasks: 'Tasks', free: 'Free time', off: 'Off' };
 
-const state = { data: null, syncedAt: null, offline: false, error: '', loading: false, busy: false, lastFetch: 0, target: null };
+const state = { data: null, syncedAt: null, offline: false, error: '', loading: false, pending: 0, lastFetch: 0, target: null };
 
 function parseLocal(s) {
   const m = s && /^(\d{4})-(\d\d)-(\d\d)(?:T(\d\d):(\d\d))?/.exec(s);
@@ -38,7 +38,7 @@ const doneOn = (d, date, id) => d.log.some((e) => e.date === date && e.itemId ==
 const nameOf = (d, id) => (d.tasks.find((t) => t.id === id) || d.habits.find((r) => r.id === id) || { name: id }).name;
 const errMsg = (e) => (e && e.message) || String(e);
 const isNet = (e) => (e && e.networkError) || e instanceof TypeError;
-const canWrite = () => !SAMPLE && !FROZEN && !!state.data && !state.offline && navigator.onLine && !state.busy && !!getSettings().gistId;
+const canWrite = () => !SAMPLE && !FROZEN && !!state.data && !state.offline && navigator.onLine && !!getSettings().gistId;
 
 // ---------- Data ----------
 function fromCache() {
@@ -58,7 +58,7 @@ async function refresh() {
   const started = state.lastFetch = Date.now(); state.loading = true; renderStatus();
   try {
     const r = await loadData();
-    if (started < state.lastWrite) return; // a save landed meanwhile; its data is newer
+    if (started < state.lastWrite || state.pending) return; // a save landed or is in flight; its data is newer
     Object.assign(state, { data: norm(r.data), syncedAt: r.syncedAt, offline: r.offline, error: '' });
   } catch (e) {
     if (isNet(e)) { state.offline = true; state.error = ''; } else state.error = errMsg(e);
@@ -67,19 +67,34 @@ async function refresh() {
   render();
 }
 
-async function write(mutate) {
-  if (!canWrite()) return false;
-  state.busy = true; render();
-  let ok = false;
-  try {
-    const r = await saveData((d) => { d.habits = habitsOf(d); delete d.routine; d.tasks ||= []; d.log ||= []; mutate(d); });
-    Object.assign(state, { data: norm(r.data), syncedAt: r.syncedAt, offline: false, error: '' });
-    ok = true; state.lastWrite = Date.now();
-  } catch (e) {
-    if (isNet(e)) { state.offline = true; state.error = 'Could not save while offline'; } else state.error = errMsg(e);
-  }
-  state.busy = false; render();
-  return ok;
+// Optimistic writes: the change shows right away, then saves are queued and sent to the Gist one at a time
+// (each fetches the latest data first, so other devices' edits aren't lost). If a save fails, the data is
+// reloaded from the Gist so the screen matches what's actually saved.
+let saveQueue = Promise.resolve();
+function write(mutate) {
+  if (!canWrite()) return Promise.resolve(false);
+  const apply = (d) => { d.habits = habitsOf(d); delete d.routine; d.tasks ||= []; d.log ||= []; mutate(d); };
+  const local = structuredClone(state.data);
+  apply(local);
+  state.data = norm(local);
+  state.pending++; render();
+  const job = saveQueue.then(async () => {
+    let ok = false;
+    try {
+      const r = await saveData(apply);
+      state.lastWrite = Date.now();
+      if (state.pending === 1) Object.assign(state, { data: norm(r.data), syncedAt: r.syncedAt, offline: false, error: '' });
+      ok = true;
+    } catch (e) {
+      if (isNet(e)) { state.offline = true; state.error = 'Could not save while offline'; } else state.error = errMsg(e);
+    }
+    state.pending--;
+    if (!ok && !state.pending) { const err = state.error; state.lastWrite = 0; await refresh(); state.error ||= err; }
+    render();
+    return ok;
+  });
+  saveQueue = job;
+  return job;
 }
 
 function act(kind) {
@@ -119,7 +134,7 @@ function renderStatus() {
   let t;
   if (SAMPLE) t = state.error || 'Sample data · read-only';
   else if (!s.gistId) t = 'Not connected';
-  else if (state.busy) t = 'Saving…';
+  else if (state.pending) t = 'Saving…';
   else if (state.error) t = `Sync error: ${state.error}`;
   else if (state.offline || !navigator.onLine) t = `Offline · last synced ${state.syncedAt ? hhmm(state.syncedAt) : 'never'}`;
   else t = state.syncedAt && !state.loading ? `Synced ${hhmm(state.syncedAt)}` : 'Syncing…';
