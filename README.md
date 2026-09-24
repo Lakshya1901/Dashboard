@@ -1,4 +1,4 @@
-# spezzatura
+# Spezzatura
 
 A priority-and-deadline task scheduler with a daily habit tracker, a Now/Next
 card, a multi-day Gantt chart, and daily progress stats. It plans your day around a

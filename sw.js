@@ -1,6 +1,6 @@
 // sw.js — minimal app-shell service worker with network-first.
 
-const CACHE_NAME = "tasks-cache-v4";
+const CACHE_NAME = "tasks-cache-v5";
 const SHELL_URLS = [
   "./",
   "./index.html",
