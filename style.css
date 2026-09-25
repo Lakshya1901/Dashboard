@@ -112,8 +112,8 @@ a { color: var(--accent); }
 .reward .small { color: var(--text); line-height: 1.4; }
 .reward.open { background: color-mix(in srgb, var(--habit) 16%, var(--card)); border-color: var(--habit); }
 .reward.open svg { color: var(--habit); }
-/* Quick add at the top of the Tasks card */
-.quick-add { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 0.5px solid var(--border); }
+/* Quick add (natural language) in Settings → Tasks */
+.quick-add { display: flex; flex-wrap: wrap; gap: 6px 8px; }
 .quick-add input { flex: 1 1 12rem; }
 .quick-add p { flex: 1 1 100%; margin: 0; }
 /* Sections inside the Tasks card */

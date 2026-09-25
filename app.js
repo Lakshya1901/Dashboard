@@ -127,16 +127,6 @@ function toggleHabit(id) {
   write({ type: 'habit', id, date, time: hhmm(n), done: !doneOn(state.data, date, id) });
 }
 
-function addQuickTask(e) {
-  e.preventDefault();
-  const p = parseQuickAdd($('#qa-input').value, now());
-  if (!p.name) return;
-  if (write({ type: 'addTask', task: { id: crypto.randomUUID().slice(0, 8), ...p, done: false } })) {
-    $('#qa-input').value = '';
-    renderQuickPreview();
-  }
-}
-
 function renderQuickPreview() {
   const p = parseQuickAdd($('#qa-input').value, now());
   $('#qa-preview').textContent = p.name
@@ -167,7 +157,6 @@ function render() {
   $('#setup').hidden = !!(SAMPLE || getSettings().gistId);
   $('#today-body').hidden = !d;
   if (!d) return;
-  $('#qa-input').disabled = $('#qa-add').disabled = !canWrite();
   try {
     const h = hoursOf(d), plan = buildPlan(d, n), nn = nowAndNext(plan, n, h);
     renderNow(d, plan, nn, n);
@@ -310,6 +299,8 @@ function openEditor() {
   $('#ed-data').disabled = $('#ed-data-hb').disabled = $('#ed-data-h').disabled = !w;
   $('#ed-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : !s.gistId ? 'Add a Gist below to edit tasks' : 'Read-only right now';
   $('#ed-err').textContent = '';
+  $('#qa-input').value = '';
+  renderQuickPreview();
   $(`#ed-theme input[value="${document.documentElement.dataset.theme || 'system'}"]`).checked = true;
   drawEditor();
   $('#editor').showModal();
@@ -356,8 +347,12 @@ function onEditorClick(e) {
   const id = () => crypto.randomUUID().slice(0, 8);
   let focus = null;
   if (act === 'add-task') {
-    focus = ['tasks', draft.tasks.filter((t) => !t.done).length];
-    draft.tasks.splice(focus[1], 0, { id: id(), name: '', priority: 'med', estimateMin: 60, deadline: ymd(now()), done: false });
+    // Typed text (e.g. "Essay 2.5h max fri") becomes a filled-in row and the box clears for the next one;
+    // with nothing typed, a blank row is added to fill in by hand
+    const p = parseQuickAdd($('#qa-input').value, now()), at = draft.tasks.filter((t) => !t.done).length;
+    draft.tasks.splice(at, 0, { id: id(), ...(p.name ? p : { name: '', priority: 'med', estimateMin: 60, deadline: ymd(now()) }), done: false });
+    if (p.name) { $('#qa-input').value = ''; renderQuickPreview(); drawEditor(); $('#qa-input').focus(); return; }
+    focus = ['tasks', at];
   } else if (act === 'add-habit') { focus = ['habits', draft.habits.length]; draft.habits.push({ id: id(), name: '' }); }
   else if (act === 'up' || act === 'down') { const j = act === 'up' ? i - 1 : i + 1; [list[i], list[j]] = [list[j], list[i]]; }
   else if (act === 'del') list.splice(i, 1);
@@ -490,9 +485,9 @@ $('#tb-form').addEventListener('submit', saveTaskBox);
 $('#tb-form').addEventListener('input', onTaskBoxInput);
 $('#tb-form').addEventListener('click', onTaskBoxClick);
 $('#ed-form').addEventListener('submit', saveEditor);
-$('#quick-add').addEventListener('submit', addQuickTask);
 $('#qa-input').addEventListener('input', renderQuickPreview);
-renderQuickPreview();
+// Enter in the quick-add box adds the task instead of saving the whole dialog
+$('#qa-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#ed-form [data-act="add-task"]').click(); } });
 $('#ed-form').addEventListener('input', onEditorInput);
 $('#ed-form').addEventListener('click', onEditorClick);
 $('#gantt').addEventListener('click', (e) => { const s = e.target.closest('.seg[data-id]'); if (s) openTaskBox(s.dataset.id); });

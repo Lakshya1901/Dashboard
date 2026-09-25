@@ -37,11 +37,6 @@
         </div>
 
         <article class="widget" id="tasks-card" aria-label="Tasks">
-          <form class="quick-add" id="quick-add" autocomplete="off">
-            <input id="qa-input" maxlength="120" placeholder="Add a task, e.g. Essay 2.5h max fri" aria-label="Add a task" aria-describedby="qa-preview" enterkeyhint="done">
-            <button type="submit" class="btn primary" id="qa-add">Add</button>
-            <p class="small muted" id="qa-preview" aria-live="polite"></p>
-          </form>
           <div id="now-card">
             <div class="row" style="margin-bottom:10px;">
               <span class="tag" id="mode-tag"></span>
@@ -95,7 +90,11 @@
     <fieldset id="ed-data">
       <legend>Tasks</legend>
       <ul class="ed-list" id="ed-tasks"></ul>
-      <button type="button" class="btn" data-act="add-task">Add task</button>
+      <div class="quick-add">
+        <input id="qa-input" maxlength="120" autocomplete="off" placeholder="Add a task, e.g. Essay 2.5h max fri" aria-label="Add a task" aria-describedby="qa-preview" enterkeyhint="done">
+        <button type="button" class="btn" data-act="add-task">Add task</button>
+        <p class="small muted" id="qa-preview" aria-live="polite"></p>
+      </div>
     </fieldset>
     <fieldset id="ed-data-hb">
       <legend>Habits</legend>
