@@ -37,6 +37,11 @@
         </div>
 
         <article class="widget" id="tasks-card" aria-label="Tasks">
+          <form class="quick-add" id="quick-add" autocomplete="off">
+            <input id="qa-input" maxlength="120" placeholder="Add a task, e.g. Essay 2.5h max fri" aria-label="Add a task" aria-describedby="qa-preview" enterkeyhint="done">
+            <button type="submit" class="btn primary" id="qa-add">Add</button>
+            <p class="small muted" id="qa-preview" aria-live="polite"></p>
+          </form>
           <div id="now-card">
             <div class="row" style="margin-bottom:10px;">
               <span class="tag" id="mode-tag"></span>

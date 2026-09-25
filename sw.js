@@ -1,6 +1,6 @@
 // sw.js — minimal app-shell service worker with network-first.
 
-const CACHE_NAME = "tasks-cache-v5";
+const CACHE_NAME = "tasks-cache-v6";
 const SHELL_URLS = [
   "./",
   "./index.html",
@@ -9,6 +9,8 @@ const SHELL_URLS = [
   "./scheduler.js",
   "./sync.js",
   "./stats.js",
+  "./ops.js",
+  "./quickadd.js",
   "./stats.css",
 ];
 

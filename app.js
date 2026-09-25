@@ -1,6 +1,8 @@
 import { buildPlan, nowAndNext, hoursOf, checkHours, DEFAULT_HOURS } from './scheduler.js';
 import { getSettings, setSettings, loadData, saveData } from './sync.js';
 import { habitStreak, habitChecker, renderStats } from './stats.js';
+import { applyOp, applyOps } from './ops.js';
+import { parseQuickAdd } from './quickadd.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -10,7 +12,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const PRI = ['max', 'med', 'low'];
 const TAGS = { tasks: 'Tasks', free: 'Free time', off: 'Off' };
 
-const state = { data: null, syncedAt: null, offline: false, error: '', loading: false, pending: 0, lastFetch: 0, target: null };
+const state = { data: null, syncedAt: null, offline: false, error: '', loading: false, flushing: false, base: null, lastFetch: 0, target: null };
 
 function parseLocal(s) {
   const m = s && /^(\d{4})-(\d\d)-(\d\d)(?:T(\d\d):(\d\d))?/.exec(s);
@@ -38,13 +40,20 @@ const doneOn = (d, date, id) => d.log.some((e) => e.date === date && e.itemId ==
 const nameOf = (d, id) => (d.tasks.find((t) => t.id === id) || d.habits.find((r) => r.id === id) || { name: id }).name;
 const errMsg = (e) => (e && e.message) || String(e);
 const isNet = (e) => (e && e.networkError) || e instanceof TypeError;
-const canWrite = () => !SAMPLE && !FROZEN && !!state.data && !state.offline && navigator.onLine && !!getSettings().gistId;
+// Writes work offline too: they're queued on this device (the outbox) and synced when back online
+const canWrite = () => !SAMPLE && !FROZEN && !!state.data && !!getSettings().gistId;
 
 // ---------- Data ----------
+// state.base is the last data seen from the Gist (or its cache); the screen shows it plus the queued outbox ops.
+const outboxKey = () => `tasks.outbox.${getSettings().gistId}`;
+const readOutbox = () => { try { return JSON.parse(localStorage.getItem(outboxKey())) || []; } catch { return []; } };
+const saveOutbox = (ops) => { try { localStorage.setItem(outboxKey(), JSON.stringify(ops)); } catch { /* storage full or blocked */ } };
+const showLocal = () => { state.data = norm(applyOps(structuredClone(state.base), readOutbox())); };
+
 function fromCache() {
   try {
     const c = JSON.parse(localStorage.getItem('tasks.cache'));
-    if (c && c.data) { state.data = norm(c.data); state.syncedAt = new Date(c.syncedAt); }
+    if (c && c.data) { state.base = c.data; state.syncedAt = new Date(c.syncedAt); showLocal(); }
   } catch { /* no cache */ }
 }
 
@@ -58,85 +67,94 @@ async function refresh() {
   const started = state.lastFetch = Date.now(); state.loading = true; renderStatus();
   try {
     const r = await loadData();
-    if (started < state.lastWrite || state.pending) return; // a save landed or is in flight; its data is newer
-    Object.assign(state, { data: norm(r.data), syncedAt: r.syncedAt, offline: r.offline, error: '' });
+    // Skip if a save landed or is in flight meanwhile; its data is newer
+    if (started >= (state.lastWrite || 0) && !state.flushing) {
+      state.base = r.data;
+      Object.assign(state, { syncedAt: r.syncedAt, offline: r.offline, error: '' });
+      showLocal();
+    }
   } catch (e) {
     if (isNet(e)) { state.offline = true; state.error = ''; } else state.error = errMsg(e);
   }
   state.loading = false;
   render();
+  flush();
 }
 
-// Optimistic writes: the change shows right away, then saves are queued and sent to the Gist one at a time
-// (each fetches the latest data first, so other devices' edits aren't lost). If a save fails, the data is
-// reloaded from the Gist so the screen matches what's actually saved.
-let saveQueue = Promise.resolve();
-function write(mutate) {
-  if (!canWrite()) return Promise.resolve(false);
-  const apply = (d) => { d.habits = habitsOf(d); delete d.routine; d.tasks ||= []; d.log ||= []; mutate(d); };
-  const local = structuredClone(state.data);
-  apply(local);
-  state.data = norm(local);
-  state.pending++; render();
-  const job = saveQueue.then(async () => {
-    let ok = false;
-    try {
-      const r = await saveData(apply);
-      state.lastWrite = Date.now();
-      if (state.pending === 1) Object.assign(state, { data: norm(r.data), syncedAt: r.syncedAt, offline: false, error: '' });
-      ok = true;
-    } catch (e) {
-      if (isNet(e)) { state.offline = true; state.error = 'Could not save while offline'; } else state.error = errMsg(e);
-    }
-    state.pending--;
-    if (!ok && !state.pending) { const err = state.error; state.lastWrite = 0; await refresh(); state.error ||= err; }
-    render();
-    return ok;
-  });
-  saveQueue = job;
-  return job;
+// Applies a change right away and queues it; flush() sends the queue to the Gist when online
+function write(op) {
+  if (!canWrite()) return false;
+  saveOutbox([...readOutbox(), op]);
+  const d = structuredClone(state.data);
+  applyOp(d, op);
+  state.data = norm(d);
+  render();
+  flush();
+  return true;
+}
+
+// Sends queued changes: fetches the latest Gist data, replays the ops on it, saves. On a network error they
+// stay queued (offline); any other error is shown and they're retried on the next refresh.
+async function flush() {
+  const ops = readOutbox();
+  if (state.flushing || !ops.length || SAMPLE || !navigator.onLine) return;
+  state.flushing = true; renderStatus();
+  try {
+    const r = await saveData((d) => applyOps(d, ops));
+    saveOutbox(readOutbox().slice(ops.length)); // keep anything queued while this save was in flight
+    state.lastWrite = Date.now();
+    state.base = r.data;
+    Object.assign(state, { syncedAt: r.syncedAt, offline: false, error: '' });
+    showLocal();
+  } catch (e) {
+    if (isNet(e)) state.offline = true; else state.error = errMsg(e);
+  }
+  state.flushing = false;
+  render();
+  if (!state.offline && !state.error && readOutbox().length) flush();
 }
 
 function act(kind) {
   const t = state.target;
   if (!t) return;
-  const n = now(), date = ymd(n), time = hhmm(n);
-  write((d) => {
-    let run = runningEntry(d, date);
-    // Close sessions left open on earlier days at that day's end
-    for (const e of d.log) if (!e.end && e.date < date && e !== run) e.end = '24:00';
-    if (run && run.date !== date && kind !== 'start') {
-      // Split a session that ran past midnight into one entry per day
-      run.end = '24:00';
-      run = { date, itemId: run.itemId, start: '00:00' };
-      d.log.push(run);
-    }
-    if (kind === 'start') { if (!run) d.log.push({ date, itemId: t.id, start: time }); return; }
-    const mine = run && run.itemId === t.id ? run : null;
-    if (mine) mine.end = time;
-    else if (kind === 'done') d.log.push({ date, itemId: t.id, start: time, end: time });
-    if (kind === 'done' && t.kind === 'task') { const task = d.tasks.find((x) => x.id === t.id); if (task) { task.done = true; task.doneDate = date; } }
-  });
+  const n = now();
+  write({ type: 'act', kind, id: t.id, itemKind: t.kind, date: ymd(n), time: hhmm(n) });
 }
 
 // A habit counts as done for the day once it has an ended entry; ticking again clears the day
 function toggleHabit(id) {
-  const n = now(), date = ymd(n), time = hhmm(n);
-  write((d) => {
-    if (doneOn(d, date, id)) d.log = d.log.filter((e) => !(e.date === date && e.itemId === id));
-    else d.log.push({ date, itemId: id, start: time, end: time });
-  });
+  const n = now(), date = ymd(n);
+  write({ type: 'habit', id, date, time: hhmm(n), done: !doneOn(state.data, date, id) });
+}
+
+function addQuickTask(e) {
+  e.preventDefault();
+  const p = parseQuickAdd($('#qa-input').value, now());
+  if (!p.name) return;
+  if (write({ type: 'addTask', task: { id: crypto.randomUUID().slice(0, 8), ...p, done: false } })) {
+    $('#qa-input').value = '';
+    renderQuickPreview();
+  }
+}
+
+function renderQuickPreview() {
+  const p = parseQuickAdd($('#qa-input').value, now());
+  $('#qa-preview').textContent = p.name
+    ? `${p.name} · ${fmtMin(p.estimateMin)} · ${p.priority} · due ${fmtDate(p.deadline)}`
+    : 'Add a time (2h, 30m), priority (max, med, low) and day (today, tomorrow, fri). Defaults: 1h, med, due in a week.';
 }
 
 // ---------- Render ----------
 function renderStatus() {
-  const s = getSettings();
+  const s = getSettings(), waiting = s.gistId ? readOutbox().length : 0;
   let t;
   if (SAMPLE) t = state.error || 'Sample data · read-only';
   else if (!s.gistId) t = 'Not connected';
-  else if (state.pending) t = 'Saving…';
-  else if (state.error) t = `Sync error: ${state.error}`;
-  else if (state.offline || !navigator.onLine) t = `Offline · last synced ${state.syncedAt ? hhmm(state.syncedAt) : 'never'}`;
+  else if (state.flushing) t = 'Saving…';
+  else if (state.error) t = `Sync error: ${state.error}${waiting ? ` · ${waiting} change${waiting > 1 ? 's' : ''} not synced yet` : ''}`;
+  else if (state.offline || !navigator.onLine) t = waiting
+    ? `Offline · ${waiting} change${waiting > 1 ? 's' : ''} saved on this device, will sync when online`
+    : `Offline · last synced ${state.syncedAt ? hhmm(state.syncedAt) : 'never'}`;
   else t = state.syncedAt && !state.loading ? `Synced ${hhmm(state.syncedAt)}` : 'Syncing…';
   if (FROZEN) t += ` · clock frozen at ${hhmm(FROZEN)}`;
   $('#status').textContent = t;
@@ -149,6 +167,7 @@ function render() {
   $('#setup').hidden = !!(SAMPLE || getSettings().gistId);
   $('#today-body').hidden = !d;
   if (!d) return;
+  $('#qa-input').disabled = $('#qa-add').disabled = !canWrite();
   try {
     const h = hoursOf(d), plan = buildPlan(d, n), nn = nowAndNext(plan, n, h);
     renderNow(d, plan, nn, n);
@@ -289,7 +308,7 @@ function openEditor() {
   $('#set-token').value = '';
   $('#set-token').placeholder = s.token ? `Saved token ending ${s.token.slice(-4)}` : 'Paste a token';
   $('#ed-data').disabled = $('#ed-data-hb').disabled = $('#ed-data-h').disabled = !w;
-  $('#ed-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : !s.gistId ? 'Add a Gist below to edit tasks' : 'Offline: tasks are read-only';
+  $('#ed-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : !s.gistId ? 'Add a Gist below to edit tasks' : 'Read-only right now';
   $('#ed-err').textContent = '';
   $(`#ed-theme input[value="${document.documentElement.dataset.theme || 'system'}"]`).checked = true;
   drawEditor();
@@ -347,7 +366,7 @@ function onEditorClick(e) {
   if (focus) $(`.ed-row[data-list="${focus[0]}"][data-i="${focus[1]}"] .ed-name`).focus();
 }
 
-async function saveEditor(e) {
+function saveEditor(e) {
   e.preventDefault();
   const s = getSettings(), gistId = $('#set-gist').value.trim(), token = $('#set-token').value.trim() || s.token;
   const gistChanged = gistId !== s.gistId;
@@ -359,13 +378,7 @@ async function saveEditor(e) {
   const hours = draft.hours, hoursErr = checkHours(hours);
   if (hoursErr) { $('#ed-err').textContent = `Check the hours: ${hoursErr}`; return; }
   const edited = JSON.stringify({ habits, tasks, hours }) !== draftOrig;
-  if (!gistChanged && edited && !canWrite()) { $('#ed-err').textContent = 'Not saved: offline. Your edits are still here; try again when connected.'; return; }
-  if (!gistChanged && edited) {
-    $('#ed-save').disabled = true;
-    const ok = await write((d) => { d.habits = habits; d.tasks = tasks; d.hours = hours; });
-    $('#ed-save').disabled = false;
-    if (!ok) { $('#ed-err').textContent = `Not saved: ${state.error}`; return; }
-  }
+  if (!gistChanged && edited && !write({ type: 'edit', habits, tasks, hours })) { $('#ed-err').textContent = 'Not saved: read-only right now.'; return; }
   $('#editor').close();
   if (gistChanged) { state.data = null; state.syncedAt = null; state.error = ''; }
   if (gistChanged || token !== s.token) refresh(); else render();
@@ -384,7 +397,7 @@ function openTaskBox(id) {
   $('#tb-title').textContent = t.name;
   $('#tb-meta').textContent = `${t.priority} priority · due ${fmtDate(t.deadline)} · estimate ${fmtMin(t.estimateMin)}`;
   $('#tb-data').disabled = !w;
-  $('#tb-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : 'Offline: read-only';
+  $('#tb-note').textContent = w ? '' : SAMPLE ? 'Sample data is read-only' : 'Read-only right now';
   $('#tb-notes').value = tbDraft.notes;
   $('#tb-err').textContent = '';
   drawTaskBox();
@@ -432,7 +445,7 @@ function onTaskBoxClick(e) {
   if (b.dataset.act === 'add-sub') $('#tb-subs li:last-child .ed-name').focus();
 }
 
-async function saveTaskBox(e) {
+function saveTaskBox(e) {
   e.preventDefault();
   const subtasks = tbDraft.subtasks.filter((s) => s.name.trim()).map((s) => {
     const out = { id: s.id, name: s.name.trim().slice(0, SUB_NAME_MAX), done: !!s.done };
@@ -440,16 +453,7 @@ async function saveTaskBox(e) {
     return out;
   });
   const notes = tbDraft.notes.trim().slice(0, NOTE_MAX);
-  if (!canWrite()) { $('#tb-err').textContent = 'Not saved: read-only right now.'; return; }
-  $('#tb-save').disabled = true;
-  const ok = await write((d) => {
-    const t = d.tasks.find((x) => x.id === tbTask.id);
-    if (!t) return;
-    if (subtasks.length) t.subtasks = subtasks; else delete t.subtasks;
-    if (notes) t.notes = notes; else delete t.notes;
-  });
-  $('#tb-save').disabled = false;
-  if (!ok) { $('#tb-err').textContent = `Not saved: ${state.error}`; return; }
+  if (!write({ type: 'taskbox', id: tbTask.id, subtasks, notes })) { $('#tb-err').textContent = 'Not saved: read-only right now.'; return; }
   $('#task-box').close();
 }
 
@@ -486,6 +490,9 @@ $('#tb-form').addEventListener('submit', saveTaskBox);
 $('#tb-form').addEventListener('input', onTaskBoxInput);
 $('#tb-form').addEventListener('click', onTaskBoxClick);
 $('#ed-form').addEventListener('submit', saveEditor);
+$('#quick-add').addEventListener('submit', addQuickTask);
+$('#qa-input').addEventListener('input', renderQuickPreview);
+renderQuickPreview();
 $('#ed-form').addEventListener('input', onEditorInput);
 $('#ed-form').addEventListener('click', onEditorClick);
 $('#gantt').addEventListener('click', (e) => { const s = e.target.closest('.seg[data-id]'); if (s) openTaskBox(s.dataset.id); });
